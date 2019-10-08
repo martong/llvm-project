@@ -644,6 +644,9 @@ namespace clang {
 
     Expected<FunctionDecl *> FindFunctionTemplateSpecialization(
         FunctionDecl *FromFD);
+
+    // Copy the inheritable attributes of the FunctionDecl `Old` into `New.
+    void CopyInheritedAttributes(FunctionDecl *Old, FunctionDecl *New);
   };
 
 template <typename InContainerTy>
@@ -3286,6 +3289,7 @@ ExpectedDecl ASTNodeImporter::VisitFunctionDecl(FunctionDecl *D) {
     auto *Recent = const_cast<FunctionDecl *>(
           FoundByLookup->getMostRecentDecl());
     ToFunction->setPreviousDecl(Recent);
+    CopyInheritedAttributes(Recent, ToFunction);
     // FIXME Probably we should merge exception specifications.  E.g. In the
     // "To" context the existing function may have exception specification with
     // noexcept-unevaluated, while the newly imported function may have an
@@ -7832,6 +7836,28 @@ Error ASTNodeImporter::ImportOverriddenMethods(CXXMethodDecl *ToMethod,
           joinErrors(std::move(ImportErrors), ImportedOrErr.takeError());
   }
   return ImportErrors;
+}
+
+// This implementation is inspired by Sema::mergeDeclAttributes.
+void ASTNodeImporter::CopyInheritedAttributes(FunctionDecl *Old,
+                                              FunctionDecl *New) {
+  assert(&Old->getASTContext() == &New->getASTContext() &&
+         "Should copy attrs only from decl in the same context!");
+  if (AnalyzerNoReturnAttr *OldAttr = Old->getAttr<AnalyzerNoReturnAttr>()) {
+    if (!New->getAttr<AnalyzerNoReturnAttr>()) {
+      AnalyzerNoReturnAttr *NewAttr = OldAttr->clone(Importer.ToContext);
+      NewAttr->setInherited(true);
+      New->addAttr(NewAttr);
+    }
+  }
+  if (Old->isNoReturn() && !New->isNoReturn()) {
+    const FunctionType *NewType = cast<FunctionType>(New->getType());
+    FunctionType::ExtInfo NewTypeInfo = NewType->getExtInfo();
+    NewType = Importer.ToContext.adjustFunctionType(
+        NewType, NewTypeInfo.withNoReturn(true));
+    auto Quals = New->getType().getQualifiers().getAsOpaqueValue();
+    New->setType(QualType(NewType, Quals));
+  }
 }
 
 ASTImporter::ASTImporter(ASTContext &ToContext, FileManager &ToFileManager,

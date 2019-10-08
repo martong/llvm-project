@@ -5783,6 +5783,134 @@ TEST_P(ASTImporterOptionSpecificTestBase, ImportDefaultConstructibleLambdas) {
             2u);
 }
 
+struct ImportAttrs : ASTImporterOptionSpecificTestBase {};
+
+TEST_P(ImportAttrs, InheritedAnalyzerNoreturnShouldBeImported) {
+  getToTuDecl(
+      R"(
+      void f();
+      )",
+      Lang_C);
+  Decl *FromTU = getTuDecl(
+      R"(
+      void f();                                    /* From0 */
+      void f() __attribute__((analyzer_noreturn)); /* From1 */
+      void f();                                    /* From2 */
+      )",
+      Lang_C, "input0.c");
+
+  auto *From2 =
+      LastDeclMatcher<FunctionDecl>().match(FromTU, functionDecl(hasName("f")));
+  ASSERT_TRUE(From2->hasAttrs());
+  ASSERT_TRUE(From2->getAttr<AnalyzerNoReturnAttr>());
+  auto *From1 = From2->getPreviousDecl();
+  ASSERT_TRUE(From1->hasAttrs());
+  ASSERT_TRUE(From1->getAttr<AnalyzerNoReturnAttr>());
+  auto *From0 = From1->getPreviousDecl();
+  ASSERT_FALSE(From0->hasAttrs());
+  ASSERT_FALSE(From0->getAttr<AnalyzerNoReturnAttr>());
+
+  auto *Imported = Import(From2, Lang_C);
+  EXPECT_TRUE(Imported->hasAttrs());
+  EXPECT_TRUE(Imported->getAttr<AnalyzerNoReturnAttr>());
+  EXPECT_EQ(Imported->getAttrs().size(), 1u);
+  EXPECT_TRUE(Imported->getPreviousDecl()->hasAttrs());
+  EXPECT_TRUE(Imported->getPreviousDecl()->getAttr<AnalyzerNoReturnAttr>());
+}
+
+TEST_P(ImportAttrs, InheritedNoreturnShouldBeImported) {
+  Decl *ToTU = getToTuDecl(
+      R"(
+      void f();
+      )",
+      Lang_C);
+  auto *To =
+      FirstDeclMatcher<FunctionDecl>().match(ToTU, functionDecl(hasName("f")));
+  ASSERT_FALSE(cast<FunctionType>(To->getType())->getNoReturnAttr());
+
+  Decl *FromTU = getTuDecl(
+      R"(
+      void f();                            /* From0 */
+      void f() __attribute__((noreturn));  /* From1 */
+      void f();                            /* From2 */
+      )",
+      Lang_C, "input0.cc");
+
+  auto *From2 =
+      LastDeclMatcher<FunctionDecl>().match(FromTU, functionDecl(hasName("f")));
+  ASSERT_TRUE(cast<FunctionType>(From2->getType())->getNoReturnAttr());
+  auto *From1 = From2->getPreviousDecl();
+  ASSERT_TRUE(cast<FunctionType>(From1->getType())->getNoReturnAttr());
+  auto *From0 = From1->getPreviousDecl();
+  ASSERT_FALSE(cast<FunctionType>(From0->getType())->getNoReturnAttr());
+
+  auto *Imported = Import(From2, Lang_C);
+  EXPECT_TRUE(cast<FunctionType>(Imported->getType())->getNoReturnAttr());
+  EXPECT_TRUE(cast<FunctionType>(Imported->getPreviousDecl()->getType())
+                  ->getNoReturnAttr());
+}
+
+TEST_P(ImportAttrs, ImportShouldInheritExistingInheritableAttr) {
+  Decl *ToTU = getToTuDecl(
+      R"(
+      void f() __attribute__((analyzer_noreturn));
+      void f();
+      )",
+      Lang_C);
+  Decl *FromTU = getTuDecl(
+      R"(
+      void f();
+      )",
+      Lang_C, "input0.c");
+
+  auto *From = FirstDeclMatcher<FunctionDecl>().match(
+      FromTU, functionDecl(hasName("f")));
+
+  auto *To0 =
+      FirstDeclMatcher<FunctionDecl>().match(ToTU, functionDecl(hasName("f")));
+  ASSERT_TRUE(To0->hasAttrs());
+  ASSERT_TRUE(To0->getAttr<AnalyzerNoReturnAttr>());
+  auto *To1 =
+      LastDeclMatcher<FunctionDecl>().match(ToTU, functionDecl(hasName("f")));
+  ASSERT_TRUE(To1->hasAttrs());
+  ASSERT_TRUE(To1->getAttr<AnalyzerNoReturnAttr>());
+  ASSERT_TRUE(To1->getAttr<AnalyzerNoReturnAttr>()->isInherited());
+
+  // Should have an Inherited attribute.
+  auto *Imported = Import(From, Lang_C);
+  EXPECT_TRUE(Imported->hasAttrs());
+  ASSERT_TRUE(Imported->getAttr<AnalyzerNoReturnAttr>());
+  EXPECT_TRUE(Imported->getAttr<AnalyzerNoReturnAttr>()->isInherited());
+}
+
+TEST_P(ImportAttrs, ImportShouldInheritExistingNoreturnTypeSpec) {
+  Decl *ToTU = getToTuDecl(
+      R"(
+      void f() __attribute__((noreturn));
+      void f();
+      )",
+      Lang_C);
+  Decl *FromTU = getTuDecl(
+      R"(
+      void f();
+      )",
+      Lang_C, "input0.c");
+
+  auto *From = FirstDeclMatcher<FunctionDecl>().match(
+      FromTU, functionDecl(hasName("f")));
+
+  auto *To0 =
+      FirstDeclMatcher<FunctionDecl>().match(ToTU, functionDecl(hasName("f")));
+  ASSERT_TRUE(cast<FunctionType>(To0->getType())->getNoReturnAttr());
+  auto *To1 =
+      LastDeclMatcher<FunctionDecl>().match(ToTU, functionDecl(hasName("f")));
+  ASSERT_TRUE(cast<FunctionType>(To1->getType())->getNoReturnAttr());
+
+  // Should have an Inherited attribute as part of the type.
+  auto *Imported = Import(From, Lang_C);
+  EXPECT_TRUE(cast<FunctionType>(Imported->getType())->getNoReturnAttr());
+}
+
 INSTANTIATE_TEST_CASE_P(ParameterizedTests, ASTImporterLookupTableTest,
                         DefaultTestValuesForRunOptions, );
 
@@ -5839,6 +5967,9 @@ INSTANTIATE_TEST_CASE_P(ParameterizedTests, LLDBLookupTest,
                         DefaultTestValuesForRunOptions, );
 
 INSTANTIATE_TEST_CASE_P(ParameterizedTests, ConflictingDeclsWithLiberalStrategy,
+                        DefaultTestValuesForRunOptions, );
+
+INSTANTIATE_TEST_CASE_P(ParameterizedTests, ImportAttrs,
                         DefaultTestValuesForRunOptions, );
 
 } // end namespace ast_matchers
