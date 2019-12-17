@@ -1,0 +1,134 @@
+#include "clang/StaticAnalyzer/Checkers/BuiltinCheckerRegistration.h"
+#include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
+#include "llvm/Support/FormatVariadic.h"
+
+using namespace clang;
+using namespace ento;
+
+class PlacementNewChecker : public Checker<check::PreStmt<CXXNewExpr>> {
+public:
+  void checkPreStmt(const CXXNewExpr *NE, CheckerContext &C) const;
+
+private:
+  // Returns the size of the target in a placement new expression.
+  // E.g. in "new (&s) long" it returns the size of `long`.
+  SVal getExtentSizeOfNewTarget(CheckerContext &C, const CXXNewExpr *NE,
+                                ProgramStateRef State) const;
+  // Returns the size of the place in a placement new expression.
+  // E.g. in "new (&s) long" it returns the size of `s`.
+  SVal getExtentSizeOfPlace(CheckerContext &C, const Expr *NE,
+                            ProgramStateRef State) const;
+  mutable std::unique_ptr<BuiltinBug> BT_Placement;
+};
+
+SVal PlacementNewChecker::getExtentSizeOfPlace(CheckerContext &C,
+                                               const Expr *Place,
+                                               ProgramStateRef State) const {
+  SVal SV = C.getSVal(Place);
+  const MemRegion *MRegion = SV.getAsRegion();
+  SValBuilder &svalBuilder = C.getSValBuilder();
+
+  // Handle pointers that point into an array. E.g.:
+  //   char *buf = new char[2];
+  //   long *lp = ::new (buf) long;
+  if (const auto *TVRegion = dyn_cast<TypedValueRegion>(MRegion))
+    // FIXME Handle offset other than 0. E.g.:
+    //   char *buf = new char[8];
+    //   long *lp = ::new (buf + 1) long;
+    if (const auto *ERegion = dyn_cast<ElementRegion>(TVRegion)) {
+      const auto *SRegion = cast<SubRegion>(ERegion->getSuperRegion());
+      DefinedOrUnknownSVal Extent = SRegion->getExtent(svalBuilder);
+      // Get the known size of the heap allocated storage.
+      // This is modelled by the MallocChecker.
+      const llvm::APSInt *ExtentInt = svalBuilder.getKnownValue(State, Extent);
+      if (!ExtentInt)
+        return UnknownVal();
+      return svalBuilder.makeIntVal(ExtentInt->getExtValue(),
+                                    svalBuilder.getArrayIndexType());
+    }
+
+  // Pointer to an array, e.g.:
+  //   char *buf = new char[2];
+  //   long *lp = ::new (&buf) long;
+  // Or pointer to a simple variable:
+  //   short s;
+  //   long *lp = ::new (&s) long;
+  const auto *SRegion = MRegion->castAs<SubRegion>();
+  DefinedOrUnknownSVal Extent = SRegion->getExtent(svalBuilder);
+  return Extent;
+}
+
+SVal PlacementNewChecker::getExtentSizeOfNewTarget(
+    CheckerContext &C, const CXXNewExpr *NE, ProgramStateRef State) const {
+  if (!State)
+    return SVal();
+  SValBuilder &svalBuilder = C.getSValBuilder();
+  SVal ElementCount;
+  if (NE->isArray()) {
+    const Expr *SizeExpr = *NE->getArraySize();
+    ElementCount = C.getSVal(SizeExpr);
+  } else {
+    ElementCount = svalBuilder.makeIntVal(1, true);
+  }
+
+  QualType ElementType = NE->getAllocatedType();
+  ASTContext &AstContext = C.getASTContext();
+  CharUnits TypeSize = AstContext.getTypeSizeInChars(ElementType);
+
+  if (ElementCount.getAs<NonLoc>()) {
+    // size in Bytes = ElementCount*TypeSize
+    SVal SizeInBytes = svalBuilder.evalBinOpNN(
+        State, BO_Mul, ElementCount.castAs<NonLoc>(),
+        svalBuilder.makeArrayIndex(TypeSize.getQuantity()),
+        svalBuilder.getArrayIndexType());
+    return SizeInBytes;
+  }
+  return SVal();
+}
+
+void PlacementNewChecker::checkPreStmt(const CXXNewExpr *NE,
+                                       CheckerContext &C) const {
+  // Check only the default placement new.
+  if (!NE->getOperatorNew()->isReservedGlobalPlacementOperator())
+    return;
+  if (NE->getNumPlacementArgs() == 0)
+    return;
+
+  ProgramStateRef State = C.getState();
+  SVal SizeOfTarget = getExtentSizeOfNewTarget(C, NE, State);
+  const Expr *Place = NE->getPlacementArg(0);
+  SVal SizeOfPlace = getExtentSizeOfPlace(C, Place, State);
+  const auto SizeOfTargetCI = SizeOfTarget.getAs<nonloc::ConcreteInt>();
+  if (!SizeOfTargetCI)
+    return;
+  const auto SizeOfPlaceCI = SizeOfPlace.getAs<nonloc::ConcreteInt>();
+  if (!SizeOfPlaceCI)
+    return;
+
+  if (SizeOfPlaceCI->getValue() < SizeOfTargetCI->getValue()) {
+    if (ExplodedNode *N = C.generateErrorNode(State)) {
+      if (!BT_Placement)
+        BT_Placement.reset(new BuiltinBug(this, "Insufficient storage BB"));
+
+      std::string Msg =
+          llvm::formatv("Argument of default placement new provides storage "
+                        "capacity of {0} bytes, but the allocated type "
+                        "requires storage capacity of {1} bytes",
+                        SizeOfPlaceCI->getValue(), SizeOfTargetCI->getValue());
+
+      auto R = std::make_unique<PathSensitiveBugReport>(*BT_Placement, Msg, N);
+      bugreporter::trackExpressionValue(N, Place, *R);
+      C.emitReport(std::move(R));
+      return;
+    }
+  }
+}
+
+void ento::registerPlacementNewChecker(CheckerManager &mgr) {
+  mgr.registerChecker<PlacementNewChecker>();
+}
+
+bool ento::shouldRegisterPlacementNewChecker(const LangOptions &LO) {
+  return true;
+}
