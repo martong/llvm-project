@@ -9,6 +9,7 @@ using namespace ento;
 class PlacementNewChecker : public Checker<check::PreStmt<CXXNewExpr>> {
 public:
   void checkPreStmt(const CXXNewExpr *NE, CheckerContext &C) const;
+  PlacementNewChecker() : BT_Placement(this, "Insufficient storage BB") {}
 
 private:
   // Returns the size of the target in a placement new expression.
@@ -19,7 +20,7 @@ private:
   // E.g. in "new (&s) long" it returns the size of `s`.
   SVal getExtentSizeOfPlace(CheckerContext &C, const Expr *NE,
                             ProgramStateRef State) const;
-  mutable std::unique_ptr<BuiltinBug> BT_Placement;
+  BuiltinBug BT_Placement;
 };
 
 SVal PlacementNewChecker::getExtentSizeOfPlace(CheckerContext &C,
@@ -108,16 +109,13 @@ void PlacementNewChecker::checkPreStmt(const CXXNewExpr *NE,
 
   if (SizeOfPlaceCI->getValue() < SizeOfTargetCI->getValue()) {
     if (ExplodedNode *N = C.generateErrorNode(State)) {
-      if (!BT_Placement)
-        BT_Placement.reset(new BuiltinBug(this, "Insufficient storage BB"));
-
       std::string Msg =
           llvm::formatv("Argument of default placement new provides storage "
                         "capacity of {0} bytes, but the allocated type "
                         "requires storage capacity of {1} bytes",
                         SizeOfPlaceCI->getValue(), SizeOfTargetCI->getValue());
 
-      auto R = std::make_unique<PathSensitiveBugReport>(*BT_Placement, Msg, N);
+      auto R = std::make_unique<PathSensitiveBugReport>(BT_Placement, Msg, N);
       bugreporter::trackExpressionValue(N, Place, *R);
       C.emitReport(std::move(R));
       return;
