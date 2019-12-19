@@ -51,13 +51,13 @@ SVal PlacementNewChecker::getExtentSizeOfNewTarget(
   if (NE->isArray()) {
     const Expr *SizeExpr = *NE->getArraySize();
     SVal ElementCount = C.getSVal(SizeExpr);
-    if (ElementCount.getAs<NonLoc>()) {
-      // size in Bytes = ElementCount * TypeSize
-      SVal SizeInBytes = SvalBuilder.evalBinOpNN(
-          State, BO_Mul, ElementCount.castAs<NonLoc>(),
+    Optional<NonLoc> ElementCountNL = ElementCount.getAs<NonLoc>();
+    if (ElementCountNL) {
+      // size in Bytes = ElementCountNL * TypeSize
+      return SvalBuilder.evalBinOp(
+          State, BO_Mul, *ElementCountNL,
           SvalBuilder.makeArrayIndex(TypeSize.getQuantity()),
           SvalBuilder.getArrayIndexType());
-      return SizeInBytes;
     }
   } else {
     // Create a concrete int whose size in bits and signedness is equal to
