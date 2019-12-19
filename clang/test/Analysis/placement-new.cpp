@@ -124,3 +124,18 @@ void f() {
   (void)lp;
 }
 } // namespace testMultiDimensionalArray3
+
+namespace testHierarchy {
+struct Base {
+  char a[2];
+};
+struct Derived : Base {
+  char x[2];
+  int y;
+};
+void f() {
+  Base b;                           // expected-note-re {{'b' initialized{{.*}}}}
+  Derived *dp = ::new (&b) Derived; // expected-warning{{Argument of default placement new provides storage capacity of 2 bytes, but the allocated type requires storage capacity of 8 bytes}} expected-note 1 {{}}
+  (void)dp;
+}
+} // namespace testHierarchy
