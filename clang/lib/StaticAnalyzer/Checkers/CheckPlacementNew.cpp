@@ -24,40 +24,22 @@ private:
 };
 
 SVal PlacementNewChecker::getExtentSizeOfPlace(CheckerContext &C,
-                                               const Expr *Place,
-                                               ProgramStateRef State) const {
-  SVal SV = C.getSVal(Place);
-  const MemRegion *MRegion = SV.getAsRegion();
-  SValBuilder &svalBuilder = C.getSValBuilder();
+                                                const Expr *Place,
+                                                ProgramStateRef State) const {
+  const MemRegion *MRegion = C.getSVal(Place).getAsRegion();
+  RegionOffset Offset = MRegion->getAsOffset();
+  const MemRegion *BaseRegion = MRegion->getBaseRegion();
+  assert(BaseRegion == Offset.getRegion());
 
-  // Handle pointers that point into an array. E.g.:
-  //   char *buf = new char[2];
-  //   long *lp = ::new (buf) long;
-  if (const auto *TVRegion = dyn_cast<TypedValueRegion>(MRegion))
-    // FIXME Handle offset other than 0. E.g.:
-    //   char *buf = new char[8];
-    //   long *lp = ::new (buf + 1) long;
-    if (const auto *ERegion = dyn_cast<ElementRegion>(TVRegion)) {
-      const auto *SRegion = cast<SubRegion>(ERegion->getSuperRegion());
-      DefinedOrUnknownSVal Extent = SRegion->getExtent(svalBuilder);
-      // Get the known size of the heap allocated storage.
-      // This is modelled by the MallocChecker.
-      const llvm::APSInt *ExtentInt = svalBuilder.getKnownValue(State, Extent);
-      if (!ExtentInt)
-        return UnknownVal();
-      return svalBuilder.makeIntVal(ExtentInt->getExtValue(),
-                                    svalBuilder.getArrayIndexType());
-    }
+  SValBuilder &SvalBuilder = C.getSValBuilder();
+  NonLoc OffsetInBytes = SvalBuilder.makeArrayIndex(
+      Offset.getOffset() / C.getASTContext().getCharWidth());
+  DefinedOrUnknownSVal ExtentInBytes =
+      BaseRegion->castAs<SubRegion>()->getExtent(SvalBuilder);
 
-  // Pointer to an array, e.g.:
-  //   char *buf = new char[2];
-  //   long *lp = ::new (&buf) long;
-  // Or pointer to a simple variable:
-  //   short s;
-  //   long *lp = ::new (&s) long;
-  const auto *SRegion = MRegion->castAs<SubRegion>();
-  DefinedOrUnknownSVal Extent = SRegion->getExtent(svalBuilder);
-  return Extent;
+  return SvalBuilder.evalBinOp(State, BinaryOperator::Opcode::BO_Sub,
+                               ExtentInBytes, OffsetInBytes,
+                               SvalBuilder.getArrayIndexType());
 }
 
 SVal PlacementNewChecker::getExtentSizeOfNewTarget(
