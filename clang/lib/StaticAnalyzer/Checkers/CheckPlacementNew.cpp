@@ -44,8 +44,6 @@ SVal PlacementNewChecker::getExtentSizeOfPlace(CheckerContext &C,
 
 SVal PlacementNewChecker::getExtentSizeOfNewTarget(
     CheckerContext &C, const CXXNewExpr *NE, ProgramStateRef State) const {
-  if (!State)
-    return SVal();
   SValBuilder &svalBuilder = C.getSValBuilder();
   SVal ElementCount;
   if (NE->isArray()) {
