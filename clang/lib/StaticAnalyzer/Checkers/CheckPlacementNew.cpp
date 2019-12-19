@@ -24,8 +24,8 @@ private:
 };
 
 SVal PlacementNewChecker::getExtentSizeOfPlace(CheckerContext &C,
-                                                const Expr *Place,
-                                                ProgramStateRef State) const {
+                                               const Expr *Place,
+                                               ProgramStateRef State) const {
   const MemRegion *MRegion = C.getSVal(Place).getAsRegion();
   RegionOffset Offset = MRegion->getAsOffset();
   const MemRegion *BaseRegion = MRegion->getBaseRegion();
@@ -44,26 +44,29 @@ SVal PlacementNewChecker::getExtentSizeOfPlace(CheckerContext &C,
 
 SVal PlacementNewChecker::getExtentSizeOfNewTarget(
     CheckerContext &C, const CXXNewExpr *NE, ProgramStateRef State) const {
-  SValBuilder &svalBuilder = C.getSValBuilder();
-  SVal ElementCount;
-  if (NE->isArray()) {
-    const Expr *SizeExpr = *NE->getArraySize();
-    ElementCount = C.getSVal(SizeExpr);
-  } else {
-    ElementCount = svalBuilder.makeIntVal(1, true);
-  }
-
+  SValBuilder &SvalBuilder = C.getSValBuilder();
   QualType ElementType = NE->getAllocatedType();
   ASTContext &AstContext = C.getASTContext();
   CharUnits TypeSize = AstContext.getTypeSizeInChars(ElementType);
-
-  if (ElementCount.getAs<NonLoc>()) {
-    // size in Bytes = ElementCount*TypeSize
-    SVal SizeInBytes = svalBuilder.evalBinOpNN(
-        State, BO_Mul, ElementCount.castAs<NonLoc>(),
-        svalBuilder.makeArrayIndex(TypeSize.getQuantity()),
-        svalBuilder.getArrayIndexType());
-    return SizeInBytes;
+  if (NE->isArray()) {
+    const Expr *SizeExpr = *NE->getArraySize();
+    SVal ElementCount = C.getSVal(SizeExpr);
+    if (ElementCount.getAs<NonLoc>()) {
+      // size in Bytes = ElementCount * TypeSize
+      SVal SizeInBytes = SvalBuilder.evalBinOpNN(
+          State, BO_Mul, ElementCount.castAs<NonLoc>(),
+          SvalBuilder.makeArrayIndex(TypeSize.getQuantity()),
+          SvalBuilder.getArrayIndexType());
+      return SizeInBytes;
+    }
+  } else {
+    // Create a concrete int whose size in bits and signedness is equal to
+    // ArrayIndexType.
+    llvm::APInt I(AstContext.getTypeSizeInChars(SvalBuilder.getArrayIndexType())
+                          .getQuantity() *
+                      C.getASTContext().getCharWidth(),
+                  TypeSize.getQuantity());
+    return SvalBuilder.makeIntVal(I, false);
   }
   return SVal();
 }
