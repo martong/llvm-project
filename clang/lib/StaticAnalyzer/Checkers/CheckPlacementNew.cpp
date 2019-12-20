@@ -93,9 +93,8 @@ void PlacementNewChecker::checkPreStmt(const CXXNewExpr *NE,
   if (SizeOfPlaceCI->getValue() < SizeOfTargetCI->getValue()) {
     if (ExplodedNode *N = C.generateErrorNode(State)) {
       std::string Msg =
-          llvm::formatv("Argument of default placement new provides storage "
-                        "capacity of {0} bytes, but the allocated type "
-                        "requires storage capacity of {1} bytes",
+          llvm::formatv("Storage provided to placement new is only {0} bytes, "
+                        "whereas the allocated type requires {1} bytes",
                         SizeOfPlaceCI->getValue(), SizeOfTargetCI->getValue());
 
       auto R = std::make_unique<PathSensitiveBugReport>(BT_Placement, Msg, N);
