@@ -27,9 +27,14 @@ SVal PlacementNewChecker::getExtentSizeOfPlace(CheckerContext &C,
                                                const Expr *Place,
                                                ProgramStateRef State) const {
   const MemRegion *MRegion = C.getSVal(Place).getAsRegion();
+  if (!MRegion)
+    return UnknownVal();
   RegionOffset Offset = MRegion->getAsOffset();
+  if (Offset.hasSymbolicOffset())
+    return UnknownVal();
   const MemRegion *BaseRegion = MRegion->getBaseRegion();
-  assert(BaseRegion == Offset.getRegion());
+  if (!BaseRegion)
+    return UnknownVal();
 
   SValBuilder &SvalBuilder = C.getSValBuilder();
   NonLoc OffsetInBytes = SvalBuilder.makeArrayIndex(
@@ -68,7 +73,7 @@ SVal PlacementNewChecker::getExtentSizeOfNewTarget(
                   TypeSize.getQuantity());
     return SvalBuilder.makeIntVal(I, false);
   }
-  return SVal();
+  return UnknownVal();
 }
 
 void PlacementNewChecker::checkPreStmt(const CXXNewExpr *NE,
