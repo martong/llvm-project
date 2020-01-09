@@ -14,18 +14,18 @@ public:
 private:
   // Returns the size of the target in a placement new expression.
   // E.g. in "new (&s) long" it returns the size of `long`.
-  SVal getExtentSizeOfNewTarget(CheckerContext &C, const CXXNewExpr *NE,
-                                ProgramStateRef State) const;
+  SVal getExtentSizeOfNewTarget(const CXXNewExpr *NE, ProgramStateRef State,
+                                CheckerContext &C) const;
   // Returns the size of the place in a placement new expression.
   // E.g. in "new (&s) long" it returns the size of `s`.
-  SVal getExtentSizeOfPlace(CheckerContext &C, const Expr *NE,
-                            ProgramStateRef State) const;
+  SVal getExtentSizeOfPlace(const Expr *NE, ProgramStateRef State,
+                            CheckerContext &C) const;
   BuiltinBug BT_Placement;
 };
 
-SVal PlacementNewChecker::getExtentSizeOfPlace(CheckerContext &C,
-                                               const Expr *Place,
-                                               ProgramStateRef State) const {
+SVal PlacementNewChecker::getExtentSizeOfPlace(const Expr *Place,
+                                               ProgramStateRef State,
+                                               CheckerContext &C) const {
   const MemRegion *MRegion = C.getSVal(Place).getAsRegion();
   if (!MRegion)
     return UnknownVal();
@@ -47,8 +47,9 @@ SVal PlacementNewChecker::getExtentSizeOfPlace(CheckerContext &C,
                                SvalBuilder.getArrayIndexType());
 }
 
-SVal PlacementNewChecker::getExtentSizeOfNewTarget(
-    CheckerContext &C, const CXXNewExpr *NE, ProgramStateRef State) const {
+SVal PlacementNewChecker::getExtentSizeOfNewTarget(const CXXNewExpr *NE,
+                                                   ProgramStateRef State,
+                                                   CheckerContext &C) const {
   SValBuilder &SvalBuilder = C.getSValBuilder();
   QualType ElementType = NE->getAllocatedType();
   ASTContext &AstContext = C.getASTContext();
@@ -85,9 +86,9 @@ void PlacementNewChecker::checkPreStmt(const CXXNewExpr *NE,
     return;
 
   ProgramStateRef State = C.getState();
-  SVal SizeOfTarget = getExtentSizeOfNewTarget(C, NE, State);
+  SVal SizeOfTarget = getExtentSizeOfNewTarget(NE, State, C);
   const Expr *Place = NE->getPlacementArg(0);
-  SVal SizeOfPlace = getExtentSizeOfPlace(C, Place, State);
+  SVal SizeOfPlace = getExtentSizeOfPlace(Place, State, C);
   const auto SizeOfTargetCI = SizeOfTarget.getAs<nonloc::ConcreteInt>();
   if (!SizeOfTargetCI)
     return;
