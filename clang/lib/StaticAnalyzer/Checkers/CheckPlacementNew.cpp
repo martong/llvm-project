@@ -71,7 +71,7 @@ SVal PlacementNewChecker::getExtentSizeOfNewTarget(const CXXNewExpr *NE,
                           .getQuantity() *
                       C.getASTContext().getCharWidth(),
                   TypeSize.getQuantity());
-    return SvalBuilder.makeIntVal(I, false);
+    return SvalBuilder.makeArrayIndex(I.getZExtValue());
   }
   return UnknownVal();
 }
