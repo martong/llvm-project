@@ -57,8 +57,7 @@ SVal PlacementNewChecker::getExtentSizeOfNewTarget(const CXXNewExpr *NE,
   if (NE->isArray()) {
     const Expr *SizeExpr = *NE->getArraySize();
     SVal ElementCount = C.getSVal(SizeExpr);
-    Optional<NonLoc> ElementCountNL = ElementCount.getAs<NonLoc>();
-    if (ElementCountNL) {
+    if (auto ElementCountNL = ElementCount.getAs<NonLoc>()) {
       // size in Bytes = ElementCountNL * TypeSize
       return SvalBuilder.evalBinOp(
           State, BO_Mul, *ElementCountNL,
