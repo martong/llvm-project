@@ -5845,6 +5845,53 @@ TEST_P(ImportAutoFunctions, ReturnWithTypeInSwitch) {
   EXPECT_TRUE(isa<AutoType>(To->getReturnType()));
 }
 
+struct ImportTypeLoc : ASTImporterOptionSpecificTestBase {};
+
+TEST_P(ImportTypeLoc, Function) {
+  Decl *FromTU = getTuDecl(
+      R"(
+      int f(int p) {
+        return 1;
+      }
+      )",
+      Lang_CXX11, "input0.cc");
+  FunctionDecl *FromF = FirstDeclMatcher<FunctionDecl>().match(
+      FromTU, functionDecl(hasName("f")));
+  FunctionDecl *ToF = Import(FromF, Lang_CXX11);
+  ASSERT_TRUE(ToF);
+  FunctionProtoTypeLoc TL =
+      ToF->getTypeSourceInfo()->getTypeLoc().castAs<FunctionProtoTypeLoc>();
+  EXPECT_EQ(TL.getNumParams(), 1u);
+  EXPECT_TRUE(TL.getParam(0));
+}
+
+TEST_P(ImportTypeLoc, Lambda) {
+  // In this test case, first the CXXRecordDecl of the lambda is imported, then
+  // the operator().
+  Decl *FromTU = getTuDecl(
+      R"(
+      auto l1 = [](unsigned lp) { return 1; };
+      int f(int p) {
+        return l1(p);
+      }
+      )",
+      Lang_CXX11, "input0.cc");
+  FunctionDecl *FromF = FirstDeclMatcher<FunctionDecl>().match(
+      FromTU, functionDecl(hasName("f")));
+  FunctionDecl *ToF = Import(FromF, Lang_CXX11);
+  ASSERT_TRUE(ToF);
+
+  TranslationUnitDecl *ToTU = ToAST->getASTContext().getTranslationUnitDecl();
+  CXXMethodDecl *ToLambdaMD = FirstDeclMatcher<LambdaExpr>()
+                                  .match(ToTU, lambdaExpr())
+                                  ->getCallOperator();
+  FunctionProtoTypeLoc TL = ToLambdaMD->getTypeSourceInfo()
+                                ->getTypeLoc()
+                                .castAs<FunctionProtoTypeLoc>();
+  EXPECT_EQ(TL.getNumParams(), 1u);
+  EXPECT_TRUE(TL.getParam(0));
+}
+
 INSTANTIATE_TEST_CASE_P(ParameterizedTests, ASTImporterLookupTableTest,
                         DefaultTestValuesForRunOptions, );
 
@@ -5901,6 +5948,9 @@ INSTANTIATE_TEST_CASE_P(ParameterizedTests, ImportVariables,
                         DefaultTestValuesForRunOptions, );
 
 INSTANTIATE_TEST_CASE_P(ParameterizedTests, LLDBLookupTest,
+                        DefaultTestValuesForRunOptions, );
+
+INSTANTIATE_TEST_CASE_P(ParameterizedTests, ImportTypeLoc,
                         DefaultTestValuesForRunOptions, );
 
 } // end namespace ast_matchers
