@@ -3278,6 +3278,15 @@ ExpectedDecl ASTNodeImporter::VisitFunctionDecl(FunctionDecl *D) {
         FromReturnTy, FromFPT->getParamTypes(), FromEPI);
   }
 
+  // Import the function parameters.
+  SmallVector<ParmVarDecl *, 8> Parameters;
+  for (auto P : D->parameters()) {
+    if (Expected<ParmVarDecl *> ToPOrErr = import(P))
+      Parameters.push_back(*ToPOrErr);
+    else
+      return ToPOrErr.takeError();
+  }
+
   QualType T;
   TypeSourceInfo *TInfo;
   SourceLocation ToInnerLocStart, ToEndLoc;
@@ -3290,15 +3299,6 @@ ExpectedDecl ASTNodeImporter::VisitFunctionDecl(FunctionDecl *D) {
              TrailingRequiresClause) = *Imp;
   else
     return Imp.takeError();
-
-  // Import the function parameters.
-  SmallVector<ParmVarDecl *, 8> Parameters;
-  for (auto P : D->parameters()) {
-    if (Expected<ParmVarDecl *> ToPOrErr = import(P))
-      Parameters.push_back(*ToPOrErr);
-    else
-      return ToPOrErr.takeError();
-  }
 
   // Create the imported function.
   FunctionDecl *ToFunction = nullptr;
@@ -3404,16 +3404,6 @@ ExpectedDecl ASTNodeImporter::VisitFunctionDecl(FunctionDecl *D) {
     ToFunction->addDeclInternal(Param);
   }
   ToFunction->setParams(Parameters);
-
-  // We need to complete creation of FunctionProtoTypeLoc manually with setting
-  // params it refers to.
-  if (TInfo) {
-    if (auto ProtoLoc =
-        TInfo->getTypeLoc().IgnoreParens().getAs<FunctionProtoTypeLoc>()) {
-      for (unsigned I = 0, N = Parameters.size(); I != N; ++I)
-        ProtoLoc.setParam(I, Parameters[I]);
-    }
-  }
 
   // Import the describing template function, if any.
   if (FromFT) {
@@ -8254,11 +8244,13 @@ public:
     IMPORT_TYPE_LOC(RParenLoc);
     IMPORT_TYPE_LOC(ExceptionSpecRange);
 
-    for (unsigned I = 0; I < From.getNumParams(); ++I) {
-      // FIXME: Import params?
-      // (avoided because import of a Decl may cause complication)
-      To.setParam(I, nullptr);
-    }
+    for (unsigned I = 0; I < From.getNumParams(); ++I)
+      To.setParam(
+          I, cast_or_null<ParmVarDecl>(
+                 // In the case of importing a lambda CXXRecordDecl the
+                 // parameter had not been imported yet. That will be imported
+                 // later when the lambda's operator() is imported.
+                 Importer.GetAlreadyImportedOrNull(From.getParam(I))));
 
     return Error::success();
   }
