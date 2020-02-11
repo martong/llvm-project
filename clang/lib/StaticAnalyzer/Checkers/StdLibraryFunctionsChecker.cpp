@@ -241,7 +241,7 @@ private:
                                         const CallExpr *CE,
                                         CheckerContext &C) const;
 
-  void initFunctionSummaries(BasicValueFactory &BVF) const;
+  void initFunctionSummaries(BasicValueFactory &BVF, CheckerContext &C) const;
 };
 } // end of anonymous namespace
 
@@ -312,10 +312,11 @@ ProgramStateRef StdLibraryFunctionsChecker::ValueRange::applyAsWithinRange(
     for (size_t I = 1; I != E; ++I) {
       const llvm::APSInt &Min = BVF.getValue(R[I - 1].second + 1ULL, T);
       const llvm::APSInt &Max = BVF.getValue(R[I].first - 1ULL, T);
-      assert(Min <= Max);
-      State = CM.assumeInclusiveRange(State, *N, Min, Max, false);
-      if (!State)
-        return nullptr;
+      if (Min <= Max) {
+        State = CM.assumeInclusiveRange(State, *N, Min, Max, false);
+        if (!State)
+          return nullptr;
+      }
     }
   }
 
@@ -451,7 +452,7 @@ StdLibraryFunctionsChecker::findFunctionSummary(const FunctionDecl *FD,
 
   SValBuilder &SVB = C.getSValBuilder();
   BasicValueFactory &BVF = SVB.getBasicValueFactory();
-  initFunctionSummaries(BVF);
+  initFunctionSummaries(BVF, C);
 
   IdentifierInfo *II = FD->getIdentifier();
   if (!II)
@@ -478,11 +479,11 @@ StdLibraryFunctionsChecker::findFunctionSummary(const FunctionDecl *FD,
 }
 
 void StdLibraryFunctionsChecker::initFunctionSummaries(
-    BasicValueFactory &BVF) const {
+    BasicValueFactory &BVF, CheckerContext &C) const {
   if (!FunctionSummaryMap.empty())
     return;
 
-  ASTContext &ACtx = BVF.getContext();
+  const ASTContext &ACtx = BVF.getContext();
 
   // These types are useful for writing specifications quickly,
   // New specifications should probably introduce more types.
@@ -491,15 +492,47 @@ void StdLibraryFunctionsChecker::initFunctionSummaries(
   // of function summary for common cases (eg. ssize_t could be int or long
   // or long long, so three summary variants would be enough).
   // Of course, function variants are also useful for C++ overloads.
-  QualType Irrelevant; // A placeholder, whenever we do not care about the type.
-  QualType IntTy = ACtx.IntTy;
-  QualType LongTy = ACtx.LongTy;
-  QualType LongLongTy = ACtx.LongLongTy;
-  QualType SizeTy = ACtx.getSizeType();
+  const QualType
+      Irrelevant; // A placeholder, whenever we do not care about the type.
+  const QualType IntTy = ACtx.IntTy;
+  const QualType LongTy = ACtx.LongTy;
+  const QualType LongLongTy = ACtx.LongLongTy;
+  const QualType SizeTy = ACtx.getSizeType();
 
-  RangeInt IntMax = BVF.getMaxValue(IntTy).getLimitedValue();
-  RangeInt LongMax = BVF.getMaxValue(LongTy).getLimitedValue();
-  RangeInt LongLongMax = BVF.getMaxValue(LongLongTy).getLimitedValue();
+  const RangeInt IntMax = BVF.getMaxValue(IntTy).getLimitedValue();
+  const RangeInt LongMax = BVF.getMaxValue(LongTy).getLimitedValue();
+  const RangeInt LongLongMax = BVF.getMaxValue(LongLongTy).getLimitedValue();
+
+  const RangeInt UCharMax =
+      BVF.getMaxValue(ACtx.UnsignedCharTy).getLimitedValue();
+
+  const Preprocessor &PP = C.getPreprocessor();
+
+  // The platform dependent value of EOF.
+  // Try our best to parse this from the Preprocessor, otherwise fallback to -1.
+  const auto EOFv = [&PP]() -> RangeInt {
+    const auto EOFMacroIt = llvm::find_if(
+        PP.macros(), [](const auto &K) { return K.first->getName() == "EOF"; });
+    if (EOFMacroIt == PP.macro_end())
+      return -1;
+    const MacroInfo *MI = PP.getMacroInfo(EOFMacroIt->first);
+
+    // Parse an integer at the end of the macro definition.
+    const Token &T = MI->tokens().back();
+    StringRef ValueStr = StringRef(T.getLiteralData(), T.getLength());
+    llvm::APInt IntValue;
+    constexpr unsigned AutoSenseRadix = 0;
+    if (ValueStr.getAsInteger(AutoSenseRadix, IntValue))
+      return -1;
+
+    // Parse an optional minus sign.
+    if (MI->tokens().size() == 2)
+      if (MI->tokens().front().is(tok::minus))
+        IntValue = -IntValue;
+
+    IntValue.dump();
+    return IntValue.getSExtValue();
+  }();
 
   // We are finally ready to define specifications for all supported functions.
   //
@@ -552,7 +585,8 @@ void StdLibraryFunctionsChecker::initFunctionSummaries(
   // Templates for summaries that are reused by many functions.
   auto Getc = [&]() {
     return Summary(ArgTypes{Irrelevant}, RetType{IntTy}, NoEvalCall)
-        .Case({ReturnValueCondition(WithinRange, Range(-1, 255))});
+        .Case(
+            {ReturnValueCondition(WithinRange, {{EOFv, EOFv}, {0, UCharMax}})});
   };
   auto Read = [&](RetType R, RangeInt Max) {
     return Summary(ArgTypes{Irrelevant, Irrelevant, SizeTy}, RetType{R},
@@ -587,10 +621,12 @@ void StdLibraryFunctionsChecker::initFunctionSummaries(
                   // The locale-specific range.
                   // No post-condition. We are completely unaware of
                   // locale-specific return values.
-                  .Case({ArgumentCondition(0U, WithinRange, {{128, 255}})})
-                  .Case({ArgumentCondition(
-                             0U, OutOfRange,
-                             {{'0', '9'}, {'A', 'Z'}, {'a', 'z'}, {128, 255}}),
+                  .Case({ArgumentCondition(0U, WithinRange, {{128, UCharMax}})})
+                  .Case({ArgumentCondition(0U, OutOfRange,
+                                           {{'0', '9'},
+                                            {'A', 'Z'},
+                                            {'a', 'z'},
+                                            {128, UCharMax}}),
                          ReturnValueCondition(WithinRange, SingleValue(0))})},
       },
       {
@@ -601,11 +637,11 @@ void StdLibraryFunctionsChecker::initFunctionSummaries(
                                            {{'A', 'Z'}, {'a', 'z'}}),
                          ReturnValueCondition(OutOfRange, SingleValue(0))})
                   // The locale-specific range.
-                  .Case({ArgumentCondition(0U, WithinRange, {{128, 255}})})
-                  .Case(
-                      {ArgumentCondition(0U, OutOfRange,
-                                         {{'A', 'Z'}, {'a', 'z'}, {128, 255}}),
-                       ReturnValueCondition(WithinRange, SingleValue(0))})},
+                  .Case({ArgumentCondition(0U, WithinRange, {{128, UCharMax}})})
+                  .Case({ArgumentCondition(
+                             0U, OutOfRange,
+                             {{'A', 'Z'}, {'a', 'z'}, {128, UCharMax}}),
+                         ReturnValueCondition(WithinRange, SingleValue(0))})},
       },
       {
           "isascii",
@@ -668,9 +704,9 @@ void StdLibraryFunctionsChecker::initFunctionSummaries(
                          ArgumentCondition(0U, OutOfRange, Range('a', 'z')),
                          ReturnValueCondition(WithinRange, SingleValue(0))})
                   // The locale-specific range.
-                  .Case({ArgumentCondition(0U, WithinRange, {{128, 255}})})
+                  .Case({ArgumentCondition(0U, WithinRange, {{128, UCharMax}})})
                   // Is not an unsigned char.
-                  .Case({ArgumentCondition(0U, OutOfRange, Range(0, 255)),
+                  .Case({ArgumentCondition(0U, OutOfRange, Range(0, UCharMax)),
                          ReturnValueCondition(WithinRange, SingleValue(0))})},
       },
       {
@@ -704,9 +740,10 @@ void StdLibraryFunctionsChecker::initFunctionSummaries(
                                            {{9, 13}, {' ', ' '}}),
                          ReturnValueCondition(OutOfRange, SingleValue(0))})
                   // The locale-specific range.
-                  .Case({ArgumentCondition(0U, WithinRange, {{128, 255}})})
-                  .Case({ArgumentCondition(0U, OutOfRange,
-                                           {{9, 13}, {' ', ' '}, {128, 255}}),
+                  .Case({ArgumentCondition(0U, WithinRange, {{128, UCharMax}})})
+                  .Case({ArgumentCondition(
+                             0U, OutOfRange,
+                             {{9, 13}, {' ', ' '}, {128, UCharMax}}),
                          ReturnValueCondition(WithinRange, SingleValue(0))})},
       },
       {
@@ -717,10 +754,10 @@ void StdLibraryFunctionsChecker::initFunctionSummaries(
                   .Case({ArgumentCondition(0U, WithinRange, Range('A', 'Z')),
                          ReturnValueCondition(OutOfRange, SingleValue(0))})
                   // The locale-specific range.
-                  .Case({ArgumentCondition(0U, WithinRange, {{128, 255}})})
+                  .Case({ArgumentCondition(0U, WithinRange, {{128, UCharMax}})})
                   // Other.
                   .Case({ArgumentCondition(0U, OutOfRange,
-                                           {{'A', 'Z'}, {128, 255}}),
+                                           {{'A', 'Z'}, {128, UCharMax}}),
                          ReturnValueCondition(WithinRange, SingleValue(0))})},
       },
       {
@@ -740,9 +777,10 @@ void StdLibraryFunctionsChecker::initFunctionSummaries(
       // The getc() family of functions that returns either a char or an EOF.
       {"getc", Summaries{Getc()}},
       {"fgetc", Summaries{Getc()}},
-      {"getchar", Summaries{Summary(ArgTypes{}, RetType{IntTy}, NoEvalCall)
-                                .Case({ReturnValueCondition(WithinRange,
-                                                            Range(-1, 255))})}},
+      {"getchar",
+       Summaries{Summary(ArgTypes{}, RetType{IntTy}, NoEvalCall)
+                     .Case({ReturnValueCondition(
+                         WithinRange, {{EOFv, EOFv}, {0, UCharMax}})})}},
 
       // read()-like functions that never return more than buffer size.
       // We are not sure how ssize_t is defined on every platform, so we
