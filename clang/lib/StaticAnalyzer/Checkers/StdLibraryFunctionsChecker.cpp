@@ -51,6 +51,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/StaticAnalyzer/Checkers/BuiltinCheckerRegistration.h"
+#include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
 #include "clang/StaticAnalyzer/Core/Checker.h"
 #include "clang/StaticAnalyzer/Core/CheckerManager.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h"
@@ -61,7 +62,8 @@ using namespace clang;
 using namespace clang::ento;
 
 namespace {
-class StdLibraryFunctionsChecker : public Checker<check::PostCall, eval::Call> {
+class StdLibraryFunctionsChecker
+    : public Checker<check::PreCall, check::PostCall, eval::Call> {
   /// Below is a series of typedefs necessary to define function specs.
   /// We avoid nesting types here because each additional qualifier
   /// would need to be repeated in every function spec.
@@ -142,6 +144,10 @@ class StdLibraryFunctionsChecker : public Checker<check::PostCall, eval::Call> {
                                               const CallEvent &Call,
                                               const Summary &Summary) const;
 
+    void checkAsWithinRange(ProgramStateRef State, const CallEvent &Call,
+                            const Summary &Summary, const BugType &BT,
+                            CheckerContext &C) const;
+
   public:
     ProgramStateRef apply(ProgramStateRef State, const CallEvent &Call,
                           const Summary &Summary) const {
@@ -155,6 +161,21 @@ class StdLibraryFunctionsChecker : public Checker<check::PostCall, eval::Call> {
       }
       llvm_unreachable("Unknown ValueRange kind!");
     }
+
+    void check(ProgramStateRef State, const CallEvent &Call,
+               const Summary &Summary, const BugType &BT,
+               CheckerContext &C) const {
+      switch (Kind) {
+      case OutOfRange:
+        llvm_unreachable("Not implemented yet!");
+      case WithinRange:
+        checkAsWithinRange(State, Call, Summary, BT, C);
+        return;
+      case ComparesToArgument:
+        llvm_unreachable("Not implemented yet!");
+      }
+      llvm_unreachable("Unknown ValueRange kind!");
+    }
   };
 
   /// The complete list of ranges that defines a single branch.
@@ -163,10 +184,15 @@ class StdLibraryFunctionsChecker : public Checker<check::PostCall, eval::Call> {
   using ArgTypes = std::vector<QualType>;
   using Ranges = std::vector<ValueRangeSet>;
 
-  /// Includes information about function prototype (which is necessary to
-  /// ensure we're modeling the right function and casting values properly),
-  /// approach to invalidation, and a list of branches - essentially, a list
-  /// of list of ranges - essentially, a list of lists of lists of segments.
+  /// Includes information about
+  ///   * function prototype (which is necessary to
+  ///     ensure we're modeling the right function and casting values properly),
+  ///   * approach to invalidation,
+  ///   * a list of branches - a list of list of ranges -
+  ///     i.e. a list of lists of lists of segments,
+  ///   * a list of argument constraints, that must be true on every branch.
+  ///     If these constraints are not satisfied that means a fatal error
+  ///     usually resulting in undefined behaviour.
   struct Summary {
     const ArgTypes ArgTys;
     const QualType RetTy;
@@ -179,6 +205,10 @@ class StdLibraryFunctionsChecker : public Checker<check::PostCall, eval::Call> {
 
     Summary &Case(ValueRangeSet VRS) {
       Cases.push_back(VRS);
+      return *this;
+    }
+    Summary &ArgConstraint(ValueRange VR) {
+      ArgConstraints.push_back(VR);
       return *this;
     }
 
@@ -216,6 +246,8 @@ class StdLibraryFunctionsChecker : public Checker<check::PostCall, eval::Call> {
   // lazily, and it doesn't change after initialization.
   mutable llvm::StringMap<Summaries> FunctionSummaryMap;
 
+  BugType BT{this, "Unsatisfied argument constraints", categories::LogicError};
+
   // Auxiliary functions to support ArgNo within all structures
   // in a unified manner.
   static QualType getArgType(const Summary &Summary, ArgNo ArgN) {
@@ -234,6 +266,7 @@ class StdLibraryFunctionsChecker : public Checker<check::PostCall, eval::Call> {
   }
 
 public:
+  void checkPreCall(const CallEvent &Call, CheckerContext &C) const;
   void checkPostCall(const CallEvent &Call, CheckerContext &C) const;
   bool evalCall(const CallEvent &Call, CheckerContext &C) const;
 
@@ -353,6 +386,82 @@ StdLibraryFunctionsChecker::ValueRange::applyAsComparesToArgument(
   return State;
 }
 
+void StdLibraryFunctionsChecker::ValueRange::checkAsWithinRange(
+    ProgramStateRef State, const CallEvent &Call,
+    const Summary &Summary, const BugType &BT,
+    CheckerContext &C) const {
+
+  ProgramStateManager &Mgr = State->getStateManager();
+  SValBuilder &SVB = Mgr.getSValBuilder();
+  BasicValueFactory &BVF = SVB.getBasicValueFactory();
+  QualType T = getArgType(Summary, getArgNo());
+  SVal V = getArgSVal(Call, getArgNo());
+  switch (V.getSubKind()) {
+  default:
+    // FIXME Handle other cases.
+    return;
+  case nonloc::ConcreteIntKind: {
+
+    const IntRangeVector &R = getRanges();
+    size_t E = R.size();
+
+    const llvm::APSInt &Left = BVF.getValue(R[0].first - 1ULL, T);
+    const llvm::APSInt &Right = BVF.getValue(R[E - 1].second + 1ULL, T);
+    assert(Left <= Right);
+
+    // Out of range.
+    const llvm::APSInt &IntVal = V.castAs<nonloc::ConcreteInt>().getValue();
+    if (IntVal <= Left || IntVal >= Right) {
+      if (ExplodedNode *N = C.generateErrorNode(State)) {
+        // FIXME Add detailed diagnostic.
+        std::string Msg = "Function argument constraint is not satisfied";
+        auto R = std::make_unique<PathSensitiveBugReport>(BT, Msg, N);
+        bugreporter::trackExpressionValue(N, Call.getArgExpr(0), *R);
+        C.emitReport(std::move(R));
+      }
+    }
+    for (size_t I = 1; I != E; ++I) {
+      const llvm::APSInt &Min = BVF.getValue(R[I - 1].second + 1ULL, T);
+      const llvm::APSInt &Max = BVF.getValue(R[I].first - 1ULL, T);
+      if (Min <= Max) {
+        if (IntVal >= Min || IntVal <= Max) {
+          if (ExplodedNode *N = C.generateErrorNode(State)) {
+            // FIXME Add detailed diagnostic.
+            std::string Msg = "Function argument constraint is not satisfied";
+            auto R = std::make_unique<PathSensitiveBugReport>(BT, Msg, N);
+            bugreporter::trackExpressionValue(N, Call.getArgExpr(0), *R);
+            C.emitReport(std::move(R));
+          }
+        }
+      }
+    }
+
+  }
+
+  } // end switch
+}
+
+void StdLibraryFunctionsChecker::checkPreCall(const CallEvent &Call,
+                                              CheckerContext &C) const {
+  const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(Call.getDecl());
+  if (!FD)
+    return;
+
+  const CallExpr *CE = dyn_cast_or_null<CallExpr>(Call.getOriginExpr());
+  if (!CE)
+    return;
+
+  Optional<Summary> FoundSummary = findFunctionSummary(FD, CE, C);
+  if (!FoundSummary)
+    return;
+
+  const Summary &Summary = *FoundSummary;
+  ProgramStateRef State = C.getState();
+  for (const auto &VR : Summary.ArgConstraints) {
+    VR.check(State, Call, Summary, BT, C);
+  }
+}
+
 void StdLibraryFunctionsChecker::checkPostCall(const CallEvent &Call,
                                                CheckerContext &C) const {
   const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(Call.getDecl());
@@ -379,6 +488,11 @@ void StdLibraryFunctionsChecker::checkPostCall(const CallEvent &Call,
       if (!NewState)
         break;
     }
+
+    // Apply argument constraints as well.
+    for (const auto &VR : Summary.ArgConstraints)
+      if (NewState)
+        NewState = VR.apply(NewState, Call, Summary);
 
     if (NewState && NewState != State)
       C.addTransition(NewState);
@@ -569,7 +683,6 @@ void StdLibraryFunctionsChecker::initFunctionSummaries(
   auto IsLessThan = [](ArgNo ArgN) { return IntRangeVector{{BO_LE, ArgN}}; };
 
   using RetType = QualType;
-
   // Templates for summaries that are reused by many functions.
   auto Getc = [&]() {
     return Summary(ArgTypes{Irrelevant}, RetType{IntTy}, NoEvalCall)
@@ -597,6 +710,9 @@ void StdLibraryFunctionsChecker::initFunctionSummaries(
 
   FunctionSummaryMap = {
       // The isascii() family of functions.
+      // The behavior is undefined if the value of the argument is not
+      // representable as unsigned char or is not equal to EOF. See e.g. C99
+      // 7.4.1.2 The isalpha function (p: 181-182).
       {
           "isalnum",
           Summaries{
@@ -615,7 +731,9 @@ void StdLibraryFunctionsChecker::initFunctionSummaries(
                                             {'A', 'Z'},
                                             {'a', 'z'},
                                             {128, UCharMax}}),
-                         ReturnValueCondition(WithinRange, SingleValue(0))})},
+                         ReturnValueCondition(WithinRange, SingleValue(0))})
+                  .ArgConstraint(ArgumentCondition(
+                      0U, WithinRange, {{EOFv, EOFv}, {0, UCharMax}}))},
       },
       {
           "isalpha",
