@@ -1,7 +1,9 @@
 // RUN: %clang_analyze_cc1 %s \
 // RUN:   -analyzer-checker=apiModeling.StdCLibraryFunctions \
+// RUN:   -analyzer-checker=apiModeling.StdCLibraryFunctionArgs \
 // RUN:   -analyzer-checker=debug.ExprInspection \
-// RUN:   -triple x86_64-unknown-linux-gnu
+// RUN:   -triple x86_64-unknown-linux-gnu \
+// RUN:   -verify
 
 void clang_analyzer_eval(int);
 

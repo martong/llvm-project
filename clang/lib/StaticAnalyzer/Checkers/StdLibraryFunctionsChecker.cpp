@@ -146,7 +146,7 @@ class StdLibraryFunctionsChecker
 
     void checkAsWithinRange(ProgramStateRef State, const CallEvent &Call,
                             const Summary &Summary, const BugType &BT,
-                            CheckerContext &C) const;
+                            bool DoReport, CheckerContext &C) const;
 
   public:
     ProgramStateRef apply(ProgramStateRef State, const CallEvent &Call,
@@ -163,13 +163,13 @@ class StdLibraryFunctionsChecker
     }
 
     void check(ProgramStateRef State, const CallEvent &Call,
-               const Summary &Summary, const BugType &BT,
+               const Summary &Summary, const BugType &BT, bool DoReport,
                CheckerContext &C) const {
       switch (Kind) {
       case OutOfRange:
         llvm_unreachable("Not implemented yet!");
       case WithinRange:
-        checkAsWithinRange(State, Call, Summary, BT, C);
+        checkAsWithinRange(State, Call, Summary, BT, DoReport, C);
         return;
       case ComparesToArgument:
         llvm_unreachable("Not implemented yet!");
@@ -269,6 +269,10 @@ public:
   void checkPreCall(const CallEvent &Call, CheckerContext &C) const;
   void checkPostCall(const CallEvent &Call, CheckerContext &C) const;
   bool evalCall(const CallEvent &Call, CheckerContext &C) const;
+
+  enum CheckKind { CK_StdCLibraryFunctionArgsChecker, CK_NumCheckKinds };
+  DefaultBool ChecksEnabled[CK_NumCheckKinds];
+  CheckerNameRef CheckNames[CK_NumCheckKinds];
 
 private:
   Optional<Summary> findFunctionSummary(const FunctionDecl *FD,
@@ -387,9 +391,8 @@ StdLibraryFunctionsChecker::ValueRange::applyAsComparesToArgument(
 }
 
 void StdLibraryFunctionsChecker::ValueRange::checkAsWithinRange(
-    ProgramStateRef State, const CallEvent &Call,
-    const Summary &Summary, const BugType &BT,
-    CheckerContext &C) const {
+    ProgramStateRef State, const CallEvent &Call, const Summary &Summary,
+    const BugType &BT, bool DoReport, CheckerContext &C) const {
 
   ProgramStateManager &Mgr = State->getStateManager();
   SValBuilder &SVB = Mgr.getSValBuilder();
@@ -409,31 +412,33 @@ void StdLibraryFunctionsChecker::ValueRange::checkAsWithinRange(
     const llvm::APSInt &Right = BVF.getValue(R[E - 1].second + 1ULL, T);
     assert(Left <= Right);
 
+    auto Report = [&](ExplodedNode *N) {
+      if (!DoReport)
+        return;
+      // FIXME Add detailed diagnostic.
+      std::string Msg = "Function argument constraint is not satisfied";
+      auto R = std::make_unique<PathSensitiveBugReport>(BT, Msg, N);
+      bugreporter::trackExpressionValue(N, Call.getArgExpr(0), *R);
+      C.emitReport(std::move(R));
+    };
+
     // Out of range.
     const llvm::APSInt &IntVal = V.castAs<nonloc::ConcreteInt>().getValue();
-    if (IntVal <= Left || IntVal >= Right) {
+    if (IntVal <= Left || IntVal >= Right)
       if (ExplodedNode *N = C.generateErrorNode(State)) {
-        // FIXME Add detailed diagnostic.
-        std::string Msg = "Function argument constraint is not satisfied";
-        auto R = std::make_unique<PathSensitiveBugReport>(BT, Msg, N);
-        bugreporter::trackExpressionValue(N, Call.getArgExpr(0), *R);
-        C.emitReport(std::move(R));
+        Report(N);
+        return;
       }
-    }
+
     for (size_t I = 1; I != E; ++I) {
       const llvm::APSInt &Min = BVF.getValue(R[I - 1].second + 1ULL, T);
       const llvm::APSInt &Max = BVF.getValue(R[I].first - 1ULL, T);
-      if (Min <= Max) {
-        if (IntVal >= Min || IntVal <= Max) {
+      if (Min <= Max)
+        if (IntVal >= Min || IntVal <= Max)
           if (ExplodedNode *N = C.generateErrorNode(State)) {
-            // FIXME Add detailed diagnostic.
-            std::string Msg = "Function argument constraint is not satisfied";
-            auto R = std::make_unique<PathSensitiveBugReport>(BT, Msg, N);
-            bugreporter::trackExpressionValue(N, Call.getArgExpr(0), *R);
-            C.emitReport(std::move(R));
+            Report(N);
+            return;
           }
-        }
-      }
     }
 
   }
@@ -457,8 +462,10 @@ void StdLibraryFunctionsChecker::checkPreCall(const CallEvent &Call,
 
   const Summary &Summary = *FoundSummary;
   ProgramStateRef State = C.getState();
+  const bool ReportArgViolation =
+      ChecksEnabled[CK_StdCLibraryFunctionArgsChecker];
   for (const auto &VR : Summary.ArgConstraints) {
-    VR.check(State, Call, Summary, BT, C);
+    VR.check(State, Call, Summary, BT, ReportArgViolation, C);
   }
 }
 
@@ -906,13 +913,22 @@ void StdLibraryFunctionsChecker::initFunctionSummaries(
 }
 
 void ento::registerStdCLibraryFunctionsChecker(CheckerManager &mgr) {
-  // If this checker grows large enough to support C++, Objective-C, or other
-  // standard libraries, we could use multiple register...Checker() functions,
-  // which would register various checkers with the help of the same Checker
-  // class, turning on different function summaries.
   mgr.registerChecker<StdLibraryFunctionsChecker>();
 }
 
 bool ento::shouldRegisterStdCLibraryFunctionsChecker(const LangOptions &LO) {
   return true;
 }
+
+#define REGISTER_CHECKER(name)                                                 \
+  void ento::register##name(CheckerManager &mgr) {                             \
+    StdLibraryFunctionsChecker *checker =                                      \
+        mgr.getChecker<StdLibraryFunctionsChecker>();                          \
+    checker->ChecksEnabled[StdLibraryFunctionsChecker::CK_##name] = true;      \
+    checker->CheckNames[StdLibraryFunctionsChecker::CK_##name] =               \
+        mgr.getCurrentCheckerName();                                           \
+  }                                                                            \
+                                                                               \
+  bool ento::shouldRegister##name(const LangOptions &LO) { return true; }
+
+REGISTER_CHECKER(StdCLibraryFunctionArgsChecker)
