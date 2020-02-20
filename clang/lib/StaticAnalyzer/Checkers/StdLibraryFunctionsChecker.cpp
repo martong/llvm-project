@@ -144,10 +144,6 @@ class StdLibraryFunctionsChecker
                                               const CallEvent &Call,
                                               const Summary &Summary) const;
 
-    void checkAsWithinRange(ProgramStateRef State, const CallEvent &Call,
-                            const Summary &Summary, const BugType &BT,
-                            bool DoReport, CheckerContext &C) const;
-
   public:
     ProgramStateRef apply(ProgramStateRef State, const CallEvent &Call,
                           const Summary &Summary) const {
@@ -162,19 +158,22 @@ class StdLibraryFunctionsChecker
       llvm_unreachable("Unknown ValueRange kind!");
     }
 
-    void check(ProgramStateRef State, const CallEvent &Call,
-               const Summary &Summary, const BugType &BT, bool DoReport,
-               CheckerContext &C) const {
+    ValueRange negate() const {
+      ValueRange tmp(*this);
       switch (Kind) {
       case OutOfRange:
-        llvm_unreachable("Not implemented yet!");
+        tmp.Kind = WithinRange;
+        break;
       case WithinRange:
-        checkAsWithinRange(State, Call, Summary, BT, DoReport, C);
-        return;
+        tmp.Kind = OutOfRange;
+        break;
       case ComparesToArgument:
-        llvm_unreachable("Not implemented yet!");
+        // TODO implement negation to each binary operation kind.
+        llvm_unreachable("Not implemented");
+      default:
+        llvm_unreachable("Unknown ValueRange kind!");
       }
-      llvm_unreachable("Unknown ValueRange kind!");
+      return tmp;
     }
   };
 
@@ -390,62 +389,6 @@ StdLibraryFunctionsChecker::ValueRange::applyAsComparesToArgument(
   return State;
 }
 
-void StdLibraryFunctionsChecker::ValueRange::checkAsWithinRange(
-    ProgramStateRef State, const CallEvent &Call, const Summary &Summary,
-    const BugType &BT, bool DoReport, CheckerContext &C) const {
-
-  ProgramStateManager &Mgr = State->getStateManager();
-  SValBuilder &SVB = Mgr.getSValBuilder();
-  BasicValueFactory &BVF = SVB.getBasicValueFactory();
-  QualType T = getArgType(Summary, getArgNo());
-  SVal V = getArgSVal(Call, getArgNo());
-  switch (V.getSubKind()) {
-  default:
-    // FIXME Handle other cases.
-    return;
-  case nonloc::ConcreteIntKind: {
-
-    const IntRangeVector &R = getRanges();
-    size_t E = R.size();
-
-    const llvm::APSInt &Left = BVF.getValue(R[0].first - 1ULL, T);
-    const llvm::APSInt &Right = BVF.getValue(R[E - 1].second + 1ULL, T);
-    assert(Left <= Right);
-
-    auto Report = [&](ExplodedNode *N) {
-      if (!DoReport)
-        return;
-      // FIXME Add detailed diagnostic.
-      std::string Msg = "Function argument constraint is not satisfied";
-      auto R = std::make_unique<PathSensitiveBugReport>(BT, Msg, N);
-      bugreporter::trackExpressionValue(N, Call.getArgExpr(0), *R);
-      C.emitReport(std::move(R));
-    };
-
-    // Out of range.
-    const llvm::APSInt &IntVal = V.castAs<nonloc::ConcreteInt>().getValue();
-    if (IntVal <= Left || IntVal >= Right)
-      if (ExplodedNode *N = C.generateErrorNode(State)) {
-        Report(N);
-        return;
-      }
-
-    for (size_t I = 1; I != E; ++I) {
-      const llvm::APSInt &Min = BVF.getValue(R[I - 1].second + 1ULL, T);
-      const llvm::APSInt &Max = BVF.getValue(R[I].first - 1ULL, T);
-      if (Min <= Max)
-        if (IntVal >= Min || IntVal <= Max)
-          if (ExplodedNode *N = C.generateErrorNode(State)) {
-            Report(N);
-            return;
-          }
-    }
-
-  }
-
-  } // end switch
-}
-
 void StdLibraryFunctionsChecker::checkPreCall(const CallEvent &Call,
                                               CheckerContext &C) const {
   const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(Call.getDecl());
@@ -462,10 +405,34 @@ void StdLibraryFunctionsChecker::checkPreCall(const CallEvent &Call,
 
   const Summary &Summary = *FoundSummary;
   ProgramStateRef State = C.getState();
-  const bool ReportArgViolation =
-      ChecksEnabled[CK_StdCLibraryFunctionArgsChecker];
-  for (const auto &VR : Summary.ArgConstraints) {
-    VR.check(State, Call, Summary, BT, ReportArgViolation, C);
+
+  auto Report = [&](ExplodedNode *N) {
+    if (!ChecksEnabled[CK_StdCLibraryFunctionArgsChecker])
+      return;
+    // FIXME Add detailed diagnostic.
+    std::string Msg = "Function argument constraint is not satisfied";
+    auto R = std::make_unique<PathSensitiveBugReport>(BT, Msg, N);
+    bugreporter::trackExpressionValue(N, Call.getArgExpr(0), *R);
+    C.emitReport(std::move(R));
+  };
+
+  for (const ValueRange &VR : Summary.ArgConstraints) {
+    ProgramStateRef SuccessSt = VR.apply(State, Call, Summary);
+    ProgramStateRef FailureSt = VR.negate().apply(State, Call, Summary);
+    // The argument constraint is not satisfied.
+    if (FailureSt && !SuccessSt) {
+      C.addTransition(FailureSt);
+      if (ExplodedNode *N = C.generateErrorNode(FailureSt))
+        Report(N);
+      break;
+    } else {
+      // Apply the constraint even if we cannot reason about the argument. This
+      // means both SuccessSt and FailureSt can be true. If we weren't applying
+      // the constraint that would mean that symbolic execution continues on a
+      // code whose behaviour is undefined.
+      assert(SuccessSt);
+      C.addTransition(SuccessSt);
+    }
   }
 }
 
@@ -495,11 +462,6 @@ void StdLibraryFunctionsChecker::checkPostCall(const CallEvent &Call,
       if (!NewState)
         break;
     }
-
-    // Apply argument constraints as well.
-    for (const auto &VR : Summary.ArgConstraints)
-      if (NewState)
-        NewState = VR.apply(NewState, Call, Summary);
 
     if (NewState && NewState != State)
       C.addTransition(NewState);
