@@ -10,7 +10,6 @@ void clang_analyzer_eval(int);
 
 int glob;
 
-typedef struct FILE FILE;
 #define EOF -1
 
 int isalnum(int);
