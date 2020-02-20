@@ -277,6 +277,8 @@ private:
   Optional<Summary> findFunctionSummary(const FunctionDecl *FD,
                                         const CallExpr *CE,
                                         CheckerContext &C) const;
+  Optional<Summary> findFunctionSummary(const CallEvent &Call,
+                                        CheckerContext &C) const;
 
   void initFunctionSummaries(CheckerContext &C) const;
 };
@@ -391,15 +393,7 @@ StdLibraryFunctionsChecker::ValueRange::applyAsComparesToArgument(
 
 void StdLibraryFunctionsChecker::checkPreCall(const CallEvent &Call,
                                               CheckerContext &C) const {
-  const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(Call.getDecl());
-  if (!FD)
-    return;
-
-  const CallExpr *CE = dyn_cast_or_null<CallExpr>(Call.getOriginExpr());
-  if (!CE)
-    return;
-
-  Optional<Summary> FoundSummary = findFunctionSummary(FD, CE, C);
+  Optional<Summary> FoundSummary = findFunctionSummary(Call, C);
   if (!FoundSummary)
     return;
 
@@ -438,15 +432,7 @@ void StdLibraryFunctionsChecker::checkPreCall(const CallEvent &Call,
 
 void StdLibraryFunctionsChecker::checkPostCall(const CallEvent &Call,
                                                CheckerContext &C) const {
-  const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(Call.getDecl());
-  if (!FD)
-    return;
-
-  const CallExpr *CE = dyn_cast_or_null<CallExpr>(Call.getOriginExpr());
-  if (!CE)
-    return;
-
-  Optional<Summary> FoundSummary = findFunctionSummary(FD, CE, C);
+  Optional<Summary> FoundSummary = findFunctionSummary(Call, C);
   if (!FoundSummary)
     return;
 
@@ -470,15 +456,7 @@ void StdLibraryFunctionsChecker::checkPostCall(const CallEvent &Call,
 
 bool StdLibraryFunctionsChecker::evalCall(const CallEvent &Call,
                                           CheckerContext &C) const {
-  const auto *FD = dyn_cast_or_null<FunctionDecl>(Call.getDecl());
-  if (!FD)
-    return false;
-
-  const auto *CE = dyn_cast_or_null<CallExpr>(Call.getOriginExpr());
-  if (!CE)
-    return false;
-
-  Optional<Summary> FoundSummary = findFunctionSummary(FD, CE, C);
+  Optional<Summary> FoundSummary = findFunctionSummary(Call, C);
   if (!FoundSummary)
     return false;
 
@@ -487,6 +465,7 @@ bool StdLibraryFunctionsChecker::evalCall(const CallEvent &Call,
   case EvalCallAsPure: {
     ProgramStateRef State = C.getState();
     const LocationContext *LC = C.getLocationContext();
+    const auto *CE = cast_or_null<CallExpr>(Call.getOriginExpr());
     SVal V = C.getSValBuilder().conjureSymbolVal(
         CE, LC, CE->getType().getCanonicalType(), C.blockCount());
     State = State->BindExpr(CE, LC, V);
@@ -564,6 +543,18 @@ StdLibraryFunctionsChecker::findFunctionSummary(const FunctionDecl *FD,
       return Spec;
 
   return None;
+}
+
+Optional<StdLibraryFunctionsChecker::Summary>
+StdLibraryFunctionsChecker::findFunctionSummary(const CallEvent &Call,
+                                                CheckerContext &C) const {
+  const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(Call.getDecl());
+  if (!FD)
+    return None;
+  const CallExpr *CE = dyn_cast_or_null<CallExpr>(Call.getOriginExpr());
+  if (!CE)
+    return None;
+  return findFunctionSummary(FD, CE, C);
 }
 
 void StdLibraryFunctionsChecker::initFunctionSummaries(
