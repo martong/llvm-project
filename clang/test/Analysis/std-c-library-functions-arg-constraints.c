@@ -85,3 +85,21 @@ void test_notnull_symbolic2(FILE *fp, int *buf) {
     // bugpath-warning{{Function argument constraint is not satisfied}} \
     // bugpath-note{{Function argument constraint is not satisfied}}
 }
+
+void *memchr(const void *, int, size_t);
+void test_buf_size_concrete() {
+  char buf[3];         // bugpath-note{{'buf' initialized here}}
+  memchr(buf, 'c', 4); // \
+  // report-warning{{Function argument constraint is not satisfied}} \
+  // bugpath-warning{{Function argument constraint is not satisfied}} \
+  // bugpath-note{{Function argument constraint is not satisfied}}
+}
+void test_buf_size_symbolic(int s) {
+  char buf[3];
+  memchr(buf, 'c', s);
+  clang_analyzer_eval(s <= 3); // \
+  // report-warning{{TRUE}} \
+  // bugpath-warning{{TRUE}} \
+  // bugpath-note{{TRUE}} \
+  // bugpath-note{{'s' is <= 3}}
+}
