@@ -10,6 +10,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/DynamicSize.h"
 #include "clang/AST/Expr.h"
 #include "clang/Basic/LLVM.h"
@@ -42,6 +43,29 @@ DefinedOrUnknownSVal getDynamicElementCount(ProgramStateRef State,
       SVB.evalBinOp(State, BO_Div, Size, ElementSizeV, SVB.getArrayIndexType());
 
   return DivisionV.castAs<DefinedOrUnknownSVal>();
+}
+
+SVal getBufferDynamicSize(const SVal &BufV, ProgramStateRef State,
+                        CheckerContext &C) {
+  const MemRegion *MRegion = BufV.getAsRegion();
+  if (!MRegion)
+    return UnknownVal();
+  RegionOffset Offset = MRegion->getAsOffset();
+  if (Offset.hasSymbolicOffset())
+    return UnknownVal();
+  const MemRegion *BaseRegion = MRegion->getBaseRegion();
+  if (!BaseRegion)
+    return UnknownVal();
+
+  SValBuilder &SvalBuilder = C.getSValBuilder();
+  NonLoc OffsetInBytes = SvalBuilder.makeArrayIndex(
+      Offset.getOffset() / C.getASTContext().getCharWidth());
+  DefinedOrUnknownSVal ExtentInBytes =
+      getDynamicSize(State, BaseRegion, SvalBuilder);
+
+  return SvalBuilder.evalBinOp(State, BinaryOperator::Opcode::BO_Sub,
+                               ExtentInBytes, OffsetInBytes,
+                               SvalBuilder.getArrayIndexType());
 }
 
 } // namespace ento

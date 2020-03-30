@@ -41,25 +41,7 @@ private:
 SVal PlacementNewChecker::getExtentSizeOfPlace(const Expr *Place,
                                                ProgramStateRef State,
                                                CheckerContext &C) const {
-  const MemRegion *MRegion = C.getSVal(Place).getAsRegion();
-  if (!MRegion)
-    return UnknownVal();
-  RegionOffset Offset = MRegion->getAsOffset();
-  if (Offset.hasSymbolicOffset())
-    return UnknownVal();
-  const MemRegion *BaseRegion = MRegion->getBaseRegion();
-  if (!BaseRegion)
-    return UnknownVal();
-
-  SValBuilder &SvalBuilder = C.getSValBuilder();
-  NonLoc OffsetInBytes = SvalBuilder.makeArrayIndex(
-      Offset.getOffset() / C.getASTContext().getCharWidth());
-  DefinedOrUnknownSVal ExtentInBytes =
-      getDynamicSize(State, BaseRegion, SvalBuilder);
-
-  return SvalBuilder.evalBinOp(State, BinaryOperator::Opcode::BO_Sub,
-                               ExtentInBytes, OffsetInBytes,
-                               SvalBuilder.getArrayIndexType());
+  return getBufferDynamicSize(C.getSVal(Place), State, C);
 }
 
 SVal PlacementNewChecker::getExtentSizeOfNewTarget(const CXXNewExpr *NE,
