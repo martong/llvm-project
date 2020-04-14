@@ -10,7 +10,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/DynamicSize.h"
 #include "clang/AST/Expr.h"
 #include "clang/Basic/LLVM.h"
@@ -45,8 +44,8 @@ DefinedOrUnknownSVal getDynamicElementCount(ProgramStateRef State,
   return DivisionV.castAs<DefinedOrUnknownSVal>();
 }
 
-SVal getBufferDynamicSize(const SVal &BufV, ProgramStateRef State,
-                        CheckerContext &C) {
+SVal getDynamicSizeWithOffset(ProgramStateRef State, const SVal &BufV,
+                              SValBuilder &SvalBuilder) {
   const MemRegion *MRegion = BufV.getAsRegion();
   if (!MRegion)
     return UnknownVal();
@@ -57,9 +56,9 @@ SVal getBufferDynamicSize(const SVal &BufV, ProgramStateRef State,
   if (!BaseRegion)
     return UnknownVal();
 
-  SValBuilder &SvalBuilder = C.getSValBuilder();
   NonLoc OffsetInBytes = SvalBuilder.makeArrayIndex(
-      Offset.getOffset() / C.getASTContext().getCharWidth());
+      Offset.getOffset() /
+      MRegion->getMemRegionManager().getContext().getCharWidth());
   DefinedOrUnknownSVal ExtentInBytes =
       getDynamicSize(State, BaseRegion, SvalBuilder);
 

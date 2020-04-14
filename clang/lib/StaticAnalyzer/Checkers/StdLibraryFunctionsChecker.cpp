@@ -233,7 +233,8 @@ class StdLibraryFunctionsChecker
       // The size argument.
       SVal SizeV = getArgSVal(Call, SizeArgN);
       // The dynamic size of the buffer argument, got from the analyzer engine.
-      SVal BufDynSize = getBufferDynamicSize(BufV, State, C);
+      SVal BufDynSize =
+          getDynamicSizeWithOffset(State, BufV, C.getSValBuilder());
 
       SValBuilder &SvalBuilder = C.getSValBuilder();
       SVal Feasible = SvalBuilder.evalBinOp(State, Op, SizeV, BufDynSize,

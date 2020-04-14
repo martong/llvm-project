@@ -41,7 +41,7 @@ private:
 SVal PlacementNewChecker::getExtentSizeOfPlace(const Expr *Place,
                                                ProgramStateRef State,
                                                CheckerContext &C) const {
-  return getBufferDynamicSize(C.getSVal(Place), State, C);
+  return getDynamicSizeWithOffset(State, C.getSVal(Place), C.getSValBuilder());
 }
 
 SVal PlacementNewChecker::getExtentSizeOfNewTarget(const CXXNewExpr *NE,

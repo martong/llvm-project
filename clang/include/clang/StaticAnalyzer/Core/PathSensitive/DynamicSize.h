@@ -32,7 +32,6 @@ DefinedOrUnknownSVal getDynamicElementCount(ProgramStateRef State,
                                             SValBuilder &SVB,
                                             QualType ElementTy);
 
-class CheckerContext;
 /// Get the dynamic size for a symbolic value that represents a buffer. If
 /// there is an offsetting to the underlying buffer we consider that too.
 /// Returns with an SVal that represents the size, this is Unknown if the
@@ -46,8 +45,8 @@ class CheckerContext;
 ///
 ///   char *bufptr;
 ///   (bufptr) // size is unknown
-SVal getBufferDynamicSize(const SVal &BufV, ProgramStateRef State,
-                        CheckerContext &C);
+SVal getDynamicSizeWithOffset(ProgramStateRef State, const SVal &BufV,
+                              SValBuilder &SvalBuilder);
 
 } // namespace ento
 } // namespace clang
