@@ -293,6 +293,13 @@ let ParentPackage = APIModeling in {
 
 def StdCLibraryFunctionsChecker : Checker<"StdCLibraryFunctions">,
   HelpText<"Improve modeling of the C standard library functions">,
+  CheckerOptions<[
+    CmdLineOption<Boolean,
+                  "DisplayLoadedSummaries",
+                  "If set to true, the checker displays all loaded summaries.",
+                  "false",
+                  Released>
+  ]>,
   Documentation<NotDocumented>;
 
 def StdCLibraryFunctionArgsChecker : Checker<"StdCLibraryFunctionArgs">,
