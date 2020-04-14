@@ -252,11 +252,7 @@ class StdLibraryFunctionsChecker
 
     ValueConstraintPtr negate() const override {
       BufferSizeConstraint Tmp(*this);
-
-      // FIXME Implement a generic negate for all BO values.
-      assert(Tmp.Op == BO_LE && "Op should be <=");
-      Tmp.Op = BO_GT;
-
+      Tmp.Op = BinaryOperator::negateComparisonOp(Op);
       return std::make_shared<BufferSizeConstraint>(Tmp);
     }
   };
