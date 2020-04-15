@@ -57,11 +57,22 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CheckerHelpers.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/DynamicSize.h"
+#include "llvm/ADT/Statistic.h"
 
 using namespace clang;
 using namespace clang::ento;
 
 namespace {
+
+#define DEBUG_TYPE "StdLibraryFunctionsChecker"
+STATISTIC(NumCall, "The # of calls handled by the checker");
+STATISTIC(NumFoundSummary, "The # of calls with associated summary");
+STATISTIC(NumArgConstraintViolated,
+          "The # of calls where an arg constraint is violated");
+STATISTIC(NumArgConstrained,
+          "The # of calls with applied argumentum constraints");
+STATISTIC(NumCaseApplied, "The # of calls with applied cases");
+
 class StdLibraryFunctionsChecker
     : public Checker<check::PreCall, check::PostCall, eval::Call> {
   /// Below is a series of typedefs necessary to define function specs.
@@ -488,9 +499,11 @@ ProgramStateRef StdLibraryFunctionsChecker::ComparisonConstraint::apply(
 
 void StdLibraryFunctionsChecker::checkPreCall(const CallEvent &Call,
                                               CheckerContext &C) const {
+  ++NumCall;
   Optional<Summary> FoundSummary = findFunctionSummary(Call, C);
   if (!FoundSummary)
     return;
+  ++NumFoundSummary;
 
   const Summary &Summary = *FoundSummary;
   ProgramStateRef State = C.getState();
@@ -501,6 +514,7 @@ void StdLibraryFunctionsChecker::checkPreCall(const CallEvent &Call,
     ProgramStateRef FailureSt = VC->negate()->apply(NewState, Call, Summary, C);
     // The argument constraint is not satisfied.
     if (FailureSt && !SuccessSt) {
+      ++NumArgConstraintViolated;
       if (ExplodedNode *N = C.generateErrorNode(NewState))
         reportBug(Call, N, C);
       break;
@@ -513,8 +527,10 @@ void StdLibraryFunctionsChecker::checkPreCall(const CallEvent &Call,
       NewState = SuccessSt;
     }
   }
-  if (NewState && NewState != State)
+  if (NewState && NewState != State) {
+    ++NumArgConstrained;
     C.addTransition(NewState);
+  }
 }
 
 void StdLibraryFunctionsChecker::checkPostCall(const CallEvent &Call,
@@ -536,8 +552,10 @@ void StdLibraryFunctionsChecker::checkPostCall(const CallEvent &Call,
         break;
     }
 
-    if (NewState && NewState != State)
+    if (NewState && NewState != State) {
+      ++NumCaseApplied;
       C.addTransition(NewState);
+    }
   }
 }
 
