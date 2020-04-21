@@ -839,6 +839,12 @@ void StdLibraryFunctionsChecker::initFunctionSummaries(
       for (const Summary &S : Summaries)
         operator()(Name, S);
     }
+
+    // Add the same summary for different names.
+    void operator()(std::vector<StringRef> Names, Summary S) {
+      for (StringRef Name : Names)
+        operator()(Name, S);
+    }
   } addToFunctionSummaryMap(ACtx, FunctionSummaryMap, DisplayLoadedSummaries);
 
   // We are finally ready to define specifications for all supported functions.
