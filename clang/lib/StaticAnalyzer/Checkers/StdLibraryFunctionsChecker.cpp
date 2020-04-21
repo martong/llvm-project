@@ -761,23 +761,31 @@ void StdLibraryFunctionsChecker::initFunctionSummaries(
   // of function summary for common cases (eg. ssize_t could be int or long
   // or long long, so three summary variants would be enough).
   // Of course, function variants are also useful for C++ overloads.
+  // const QualType CharTy = ACtx.CharTy;
+  const QualType WCharTy = ACtx.WideCharTy;
   const QualType IntTy = ACtx.IntTy;
   const QualType LongTy = ACtx.LongTy;
+  const QualType UnsignedLongTy = ACtx.UnsignedLongTy;
   const QualType LongLongTy = ACtx.LongLongTy;
   const QualType SizeTy = ACtx.getSizeType();
+  const QualType VoidTy = ACtx.VoidTy;
   const QualType VoidPtrTy = ACtx.VoidPtrTy; // void *
   const QualType VoidPtrRestrictTy =
       ACtx.getRestrictType(VoidPtrTy); // void *restrict
   const QualType ConstVoidPtrTy =
       ACtx.getPointerType(ACtx.VoidTy.withConst()); // const void *
+  const QualType CharPtrTy = ACtx.getPointerType(ACtx.CharTy); // char *
   const QualType ConstCharPtrTy =
       ACtx.getPointerType(ACtx.CharTy.withConst()); // const char *
+  const QualType WCharPtrTy = ACtx.getPointerType(WCharTy); // wchar_t *
   const QualType ConstVoidPtrRestrictTy =
       ACtx.getRestrictType(ConstVoidPtrTy); // const void *restrict
 
   const RangeInt IntMax = BVF.getMaxValue(IntTy).getLimitedValue();
+  const RangeInt IntMin = BVF.getMinValue(IntTy).getLimitedValue();
   const RangeInt LongMax = BVF.getMaxValue(LongTy).getLimitedValue();
   const RangeInt LongLongMax = BVF.getMaxValue(LongLongTy).getLimitedValue();
+  const RangeInt SizeMax = BVF.getMaxValue(SizeTy).getLimitedValue();
 
   // Set UCharRangeMax to min of int or uchar maximum value.
   // The C standard states that the arguments of functions like isalpha must
@@ -1094,6 +1102,179 @@ void StdLibraryFunctionsChecker::initFunctionSummaries(
   addToFunctionSummaryMap("getdelim",
                           {Getline(IntTy, IntMax), Getline(LongTy, LongMax),
                            Getline(LongLongTy, LongLongMax)});
+
+  // int fprintf(FILE *stream, const char *format, ...);
+  addToFunctionSummaryMap(
+      "fprintf",
+      Summary(ArgTypes{Irrelevant, ConstCharPtrTy}, RetType{IntTy}, NoEvalCall)
+          .ArgConstraint(NotNull(ArgNo(0)))
+          .ArgConstraint(NotNull(ArgNo(1))));
+
+  // size_t strcspn(const char *cs, const char *ct);
+  addToFunctionSummaryMap("strcspn",
+                          Summary(ArgTypes{ConstCharPtrTy, ConstCharPtrTy},
+                                  RetType{SizeTy}, EvalCallAsPure)
+                              // TODO .ArgConstraint(NullTerminated(ArgNo(0)))
+                              // TODO .ArgConstraint(NullTerminated(ArgNo(1)))
+                              .ArgConstraint(NotNull(ArgNo(0)))
+                              .ArgConstraint(NotNull(ArgNo(1))));
+
+  // void qsort(void *base, size_t n, size_t size,
+  //            int (*cmp)(const void *, const void *));
+  addToFunctionSummaryMap(
+      "qsort",
+      Summary(ArgTypes{VoidPtrTy, SizeTy, SizeTy, Irrelevant}, RetType{VoidTy},
+              NoEvalCall)
+          .ArgConstraint(NotNull(ArgNo(0)))
+          .ArgConstraint(NotNull(ArgNo(3)))
+          //.ArgConstraint(ArgumentCondition(1, WithinRange, Range(0, SizeMax)))
+          //.ArgConstraint(ArgumentCondition(2, WithinRange, Range(0, SizeMax)))
+          );
+
+  // int abs(int j);    intmax_t imaxabs(intmax_t n);    double fabs(double x);
+  // double complex cabs(double complex z);    long int labs(long int x); long
+  // long int llabs(long long int x);
+  addToFunctionSummaryMap(
+      "abs", Summary(ArgTypes{IntTy}, RetType{IntTy}, EvalCallAsPure)
+                 .Case({ArgumentCondition(0, WithinRange, SingleValue(0)),
+                        ReturnValueCondition(WithinRange, SingleValue(0))})
+                 .Case({ArgumentCondition(0, WithinRange, Range(1, IntMax)),
+                        ReturnValueCondition(WithinRange, Range(IntMin, -1))})
+                 .Case({ArgumentCondition(0, WithinRange, Range(IntMin, -1)),
+                        ReturnValueCondition(WithinRange, Range(1, IntMax))}));
+
+  // double sqrt(double x);
+  // addToFunctionSummaryMap("sqrt",
+  // Summary(ArgTypes{}, RetType{}, EvalCallAsPure)
+  //.ArgConstraint(ArgumentCondition(0, WithinRange, Range(0.0:)))
+  //);
+
+  // int mbtowc(wchar_t* pwc, const char* pmb, size_t max);
+  addToFunctionSummaryMap(
+      "mbtowc",
+      Summary(ArgTypes{WCharPtrTy, ConstCharPtrTy, SizeTy}, RetType{IntTy},
+              NoEvalCall)
+          //.ArgConstraint(ArgumentCondition(2, WithinRange, Range(0, SizeMax)))
+          );
+
+  // struct tm * localtime(const time_t *tp);
+  addToFunctionSummaryMap("localtime", Summary(ArgTypes{Irrelevant},
+                                               RetType{Irrelevant}, NoEvalCall)
+                                           .ArgConstraint(NotNull(ArgNo(0))));
+
+  // void *memchr(const void *s, int c, size_t n);
+  addToFunctionSummaryMap(
+      "memchr",
+      Summary(ArgTypes{ConstVoidPtrTy, IntTy, SizeTy}, RetType{VoidPtrTy},
+              EvalCallAsPure)
+          .ArgConstraint(NotNull(ArgNo(0)))
+          .ArgConstraint(BufferSize(0, 2))
+          .ArgConstraint(
+              ArgumentCondition(1, WithinRange, Range(0, UCharRangeMax)))
+          //.ArgConstraint(ArgumentCondition(2, WithinRange, Range(0, SizeMax)))
+          );
+
+  // void* bsearch(const void* key, const void* base, size_t num, size_t size,
+  // int(*compar)(const void*,const void*));
+  addToFunctionSummaryMap(
+      "bsearch",
+      Summary(ArgTypes{ConstVoidPtrTy, ConstVoidPtrTy, SizeTy, SizeTy},
+              RetType{VoidPtrTy}, EvalCallAsPure)
+          .ArgConstraint(NotNull(ArgNo(0)))
+          .ArgConstraint(NotNull(ArgNo(1)))
+          //.ArgConstraint(ArgumentCondition(2, WithinRange, Range(0, SizeMax)))
+          //.ArgConstraint(ArgumentCondition(3, WithinRange, Range(0, SizeMax)))
+          .ArgConstraint(NotNull(ArgNo(4))));
+
+  // int fputc(int c, FILE *stream);
+  // int putc(int c, FILE *stream);
+  addToFunctionSummaryMap(
+      {"fputc", "putc"},
+      Summary(ArgTypes{IntTy, Irrelevant}, RetType{IntTy}, NoEvalCall)
+          .ArgConstraint(
+              ArgumentCondition(0, WithinRange, Range(0, UCharRangeMax)))
+          .ArgConstraint(NotNull(ArgNo(1))));
+
+  // void *reallocarray(void *ptr, size_t nmemb, size_t size);
+  addToFunctionSummaryMap(
+      "reallocarray",
+      Summary(ArgTypes{VoidPtrTy, SizeTy, SizeTy}, RetType{VoidPtrTy},
+              NoEvalCall)
+          //.ArgConstraint(ArgumentCondition(1, WithinRange, Range(0, SizeMax)))
+          //.ArgConstraint(ArgumentCondition(2, WithinRange, Range(0, SizeMax)))
+          );
+
+  // size_t strftime(char *s, size_t max, const char *fmt, const struct tm *p);
+  addToFunctionSummaryMap(
+      "strftime",
+      Summary(ArgTypes{CharPtrTy, SizeTy, ConstCharPtrTy, Irrelevant},
+              RetType{SizeTy}, NoEvalCall)
+          .ArgConstraint(NotNull(ArgNo(0)))
+          //.ArgConstraint(ArgumentCondition(1, WithinRange, Range(0, SizeMax)))
+          .ArgConstraint(NotNull(ArgNo(2)))
+          .ArgConstraint(NotNull(ArgNo(3))));
+
+  // char* strstr(const char *s1, const char *s2);
+  addToFunctionSummaryMap("strstr",
+                          Summary(ArgTypes{ConstCharPtrTy, ConstCharPtrTy},
+                                  RetType{CharPtrTy}, NoEvalCall)
+                              .ArgConstraint(NotNull(ArgNo(0)))
+                              .ArgConstraint(NotNull(ArgNo(1))));
+
+  // size_t strspn(const char *cs, const char *ct);
+  addToFunctionSummaryMap("strspn",
+                          Summary(ArgTypes{ConstCharPtrTy, ConstCharPtrTy},
+                                  RetType{SizeTy}, NoEvalCall)
+                              .ArgConstraint(NotNull(ArgNo(0)))
+                              .ArgConstraint(NotNull(ArgNo(1))));
+
+  auto Strtol = [&](RetType R) {
+    return Summary(ArgTypes{ConstCharPtrTy, Irrelevant, IntTy}, RetType{R},
+                   NoEvalCall)
+        .ArgConstraint(NotNull(ArgNo(0)))
+        .ArgConstraint(ArgumentCondition(2, WithinRange, {{0, 0}, {2, 36}}));
+  };
+  // long strtol(const char *s, char **endp, int base);
+  addToFunctionSummaryMap("strtol", Strtol(LongTy));
+  // unsigned long strtoul(const char *s, char **endp, int base);
+  addToFunctionSummaryMap("strtoul", Strtol(UnsignedLongTy));
+  // long long strtoll(const char *s, char **endp, int base);
+  addToFunctionSummaryMap("strtoll", Strtol(LongLongTy));
+
+  // char * ctime(const time_t *tp);
+  addToFunctionSummaryMap(
+      "ctime", Summary(ArgTypes{Irrelevant}, RetType{CharPtrTy}, NoEvalCall)
+                   .ArgConstraint(NotNull(ArgNo(0))));
+
+  // int fputs(const char *string, FILE* stream);
+  addToFunctionSummaryMap("fputs", Summary(ArgTypes{ConstCharPtrTy, Irrelevant},
+                                           RetType{IntTy}, NoEvalCall)
+                                       .ArgConstraint(NotNull(ArgNo(0)))
+                                       .ArgConstraint(NotNull(ArgNo(1))));
+
+  // char * getenv(const char *name);
+  addToFunctionSummaryMap(
+      "getenv", Summary(ArgTypes{Irrelevant}, RetType{CharPtrTy}, NoEvalCall)
+                    .ArgConstraint(NotNull(ArgNo(0))));
+
+  // char * strchr(const char *cs, int c);
+  // char * strrchr(const char * str, int character);
+  addToFunctionSummaryMap(
+      {"strchr", "strrchr"},
+      Summary(ArgTypes{ConstCharPtrTy, IntTy}, RetType{CharPtrTy}, NoEvalCall)
+          .ArgConstraint(NotNull(ArgNo(0)))
+          .ArgConstraint(
+              ArgumentCondition(1, WithinRange, Range(0, UCharRangeMax))));
+
+  // int tolower(int c);
+  // int toupper(int c);
+  addToFunctionSummaryMap(
+      {"tolower", "toupper"},
+      Summary(ArgTypes{}, RetType{}, NoEvalCall)
+          .Case({ReturnValueCondition(WithinRange,
+                                      {{EOFv, EOFv}, {0, UCharRangeMax}})})
+          .ArgConstraint(ArgumentCondition(
+              0, WithinRange, {{EOFv, EOFv}, {0, UCharRangeMax}})));
 
   // Functions for testing.
   if (ChecksEnabled[CK_StdCLibraryFunctionsTesterChecker]) {

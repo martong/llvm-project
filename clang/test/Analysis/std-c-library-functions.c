@@ -226,3 +226,13 @@ void test_call_by_pointer() {
   f = ispunct;
   clang_analyzer_eval(f('A')); // expected-warning{{FALSE}}
 }
+
+int abs(int);
+void test_abs(int p) {
+  if (p == 0)
+    clang_analyzer_eval(abs(p) == 0); // expected-warning{{TRUE}}
+  if (p > 0)
+    clang_analyzer_eval(abs(p) < 0); // expected-warning{{TRUE}}
+  if (p < 0)
+    clang_analyzer_eval(abs(p) > 0); // expected-warning{{TRUE}}
+}
