@@ -319,6 +319,7 @@ class StdLibraryFunctionsChecker
   struct Signature {
     const ArgTypes ArgTys;
     const QualType RetTy;
+    Signature() {};
     Signature(ArgTypes ArgTys, QualType RetTy) : ArgTys(ArgTys), RetTy(RetTy) {
       assertRetTypeSuitableForSignature(RetTy);
       for (size_t I = 0, E = ArgTys.size(); I != E; ++I) {
@@ -327,6 +328,7 @@ class StdLibraryFunctionsChecker
       }
     }
     bool matches(const FunctionDecl *FD) const;
+    bool empty() const { return RetTy.isNull() && ArgTys.size() == 0; }
 
   private:
     static void assertArgTypeSuitableForSignature(QualType T) {
@@ -374,6 +376,10 @@ class StdLibraryFunctionsChecker
 
     Summary(ArgTypes ArgTys, QualType RetTy, InvalidationKind InvalidationKd)
         : Sign(ArgTys, RetTy), InvalidationKd(InvalidationKd) {}
+
+    // Create with empty signature.
+    Summary(InvalidationKind InvalidationKd)
+        : InvalidationKd(InvalidationKd) {}
 
     Summary &Case(ConstraintSet&& CS) {
       CaseConstraints.push_back(std::move(CS));
@@ -660,6 +666,10 @@ bool StdLibraryFunctionsChecker::evalCall(const CallEvent &Call,
 
 bool StdLibraryFunctionsChecker::Signature::matches(
     const FunctionDecl *FD) const {
+  // Empty matches everything.
+  if (empty())
+    return true;
+
   // Check number of arguments:
   if (FD->param_size() != ArgTys.size())
     return false;
@@ -788,16 +798,23 @@ void StdLibraryFunctionsChecker::initFunctionSummaries(
       auto LookupRes = ACtx.getTranslationUnitDecl()->lookup(&II);
       if (LookupRes.size() == 0)
         return;
+      // FunctionDecls.
+      SmallVector<FunctionDecl *, 2> FDs;
       for (Decl *D : LookupRes) {
-        if (auto *FD = dyn_cast<FunctionDecl>(D)) {
-          if (S.Sign.matches(FD) && S.validate(FD)) {
-            auto Res = Map.insert({FD->getCanonicalDecl(), S});
-            assert(Res.second && "Function already has a summary set!");
-            (void)Res;
-            if (DisplayLoadedSummaries)
-              llvm::errs() << "Loaded summary for " << Name << "\n";
-            return;
-          }
+        if (auto *FD = dyn_cast<FunctionDecl>(D))
+          FDs.push_back(FD);
+      }
+      // Empty signatures should be used only only without name overloading.
+      if (FDs.size() > 1 && S.Sign.empty())
+        return;
+      for (FunctionDecl *FD : FDs) {
+        if (S.Sign.matches(FD) && S.validate(FD)) {
+          auto Res = Map.insert({FD->getCanonicalDecl(), S});
+          assert(Res.second && "Function already has a summary set!");
+          (void)Res;
+          if (DisplayLoadedSummaries)
+            llvm::errs() << "Loaded summary for " << Name << "\n";
+          return;
         }
       }
     }
