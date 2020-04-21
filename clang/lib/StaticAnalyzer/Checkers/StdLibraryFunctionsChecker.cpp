@@ -126,7 +126,14 @@ class StdLibraryFunctionsChecker
       llvm_unreachable("Not implemented");
     };
     /// Do sanity check on the constraint.
-    virtual bool validate(const FunctionDecl *) const { return true; }
+    bool check(const FunctionDecl *FD) const {
+      assert((ArgN == Ret || ArgN < FD->getNumParams()) && "Arg out of range!");
+      return validate(FD);
+    }
+    /// Do polymorphic sanity check on the constraint.
+    virtual bool validate(const FunctionDecl *FD) const {
+      return true;
+    }
     virtual bool skip() const { return false; }
     ArgNo getArgNo() const { return ArgN; }
 
@@ -301,6 +308,15 @@ class StdLibraryFunctionsChecker
       Tmp.Op = BinaryOperator::negateComparisonOp(Op);
       return std::make_shared<BufferSizeConstraint>(Tmp);
     }
+
+    bool validate(const FunctionDecl *FD) const override {
+      assert(SizeArgN < FD->param_size() && "Size arg out of range!");
+      if (SizeMultiplierArgN) {
+        assert(*SizeMultiplierArgN < FD->param_size() && "Size mul arg out of range!");
+      }
+      return true;
+    }
+
   };
 
   /// The complete list of constraints that defines a single branch.
@@ -397,10 +413,10 @@ class StdLibraryFunctionsChecker
     bool validate(const FunctionDecl *FD) {
       for (const auto &Case : CaseConstraints)
         for (const ValueConstraintPtr &Constraint : Case)
-          if (!Constraint->validate(FD))
+          if (!Constraint->check(FD))
             return false;
       for (const ValueConstraintPtr &Constraint : ArgConstraints)
-        if (!Constraint->validate(FD))
+        if (!Constraint->check(FD))
           return false;
       this->FD = FD;
       return true;
