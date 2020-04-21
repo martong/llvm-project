@@ -127,6 +127,7 @@ class StdLibraryFunctionsChecker
     };
     /// Do sanity check on the constraint.
     virtual bool validate(const FunctionDecl *) const { return true; }
+    virtual bool skip() const { return false; }
     ArgNo getArgNo() const { return ArgN; }
 
   protected:
@@ -235,6 +236,8 @@ class StdLibraryFunctionsChecker
              "This constraint should be applied only on a pointer type");
       return getArgType(FD, ArgN)->isPointerType();
     }
+
+    bool skip() const override { return false; }
   };
 
   // Represents a buffer argument with an additional size argument.
@@ -377,6 +380,8 @@ class StdLibraryFunctionsChecker
       return *this;
     }
     Summary &ArgConstraint(ValueConstraintPtr VC) {
+      if (VC->skip())
+        return *this;
       ArgConstraints.push_back(VC);
       return *this;
     }
