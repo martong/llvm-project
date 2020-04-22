@@ -1285,6 +1285,1339 @@ void StdLibraryFunctionsChecker::initFunctionSummaries(
           .ArgConstraint(ArgumentCondition(
               0, WithinRange, {{EOFv, EOFv}, {0, UCharRangeMax}})));
 
+  // POSIX
+
+  // long a64l(const char *str64);
+  addToFunctionSummaryMap("a64l",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // char *l64a(long value);        The behavior of l64a() is undefined when
+  // value is negative.
+  addToFunctionSummaryMap("l64a", Summary(NoEvalCall)
+                                      .ArgConstraint(ArgumentCondition(
+                                          0, WithinRange, Range(0, Max))));
+
+  // int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
+  addToFunctionSummaryMap(
+      "accept",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max))));
+
+  // int access(const char *pathname, int amode);
+  addToFunctionSummaryMap("access",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int bind(int socket, const struct sockaddr *address, socklen_t
+  // address_len);
+  addToFunctionSummaryMap(
+      "bind",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max)))
+          // FIXME The below param is actually a transparent union in C
+          // (__CONST_SOCKADDR_ARG). We should be able to handle transparent
+          // union of pointers as a pointer. See the attribute
+          // __transparent_union__ .
+          //.ArgConstraint(NotNull(ArgNo(1)))
+          .ArgConstraint(BufferSize(1, 2))
+          .ArgConstraint(ArgumentCondition(2, WithinRange, Range(0, Max))));
+
+  // int listen(int sockfd, int backlog);
+  addToFunctionSummaryMap(
+      "listen",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max))));
+
+  // int getpeername(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
+  addToFunctionSummaryMap(
+      "getpeername",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max)))
+          // FIXME The below param is actually a transparent union in C
+          // (__CONST_SOCKADDR_ARG). We should be able to handle transparent
+          // union of pointers as a pointer. See the attribute
+          // __transparent_union__ .
+          //.ArgConstraint(NotNull(ArgNo(1)))
+          .ArgConstraint(NotNull(ArgNo(2))));
+
+  // int getsockname(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
+  addToFunctionSummaryMap(
+      "getsockname",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max)))
+          // FIXME The below param is actually a transparent union in C
+          // (__CONST_SOCKADDR_ARG). We should be able to handle transparent
+          // union of pointers as a pointer. See the attribute
+          // __transparent_union__ .
+          //.ArgConstraint(NotNull(ArgNo(1)))
+          .ArgConstraint(NotNull(ArgNo(2))));
+
+  // int connect(int socket, const struct sockaddr *address, socklen_t
+  // address_len);
+  addToFunctionSummaryMap("connect", Summary(NoEvalCall)
+                                         .ArgConstraint(ArgumentCondition(
+                                             0, WithinRange, Range(0, Max)))
+          // FIXME The below param is actually a transparent union in C
+          // (__CONST_SOCKADDR_ARG). We should be able to handle transparent
+          // union of pointers as a pointer. See the attribute
+          // __transparent_union__ .
+                                         //.ArgConstraint(NotNull(ArgNo(1)))
+                                         );
+
+  // int dup(int fildes);   char *strdup(const char *s);    char *strndup(const
+  // char *s, size_t n);    wchar_t *wcsdup(const wchar_t *s);
+  addToFunctionSummaryMap("dup", Summary(NoEvalCall)
+                                     .ArgConstraint(ArgumentCondition(
+                                         0, WithinRange, Range(0, Max))));
+
+  // int dup2(int fildes1, int filedes2);
+  addToFunctionSummaryMap(
+      "dup2",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max)))
+          .ArgConstraint(ArgumentCondition(1, WithinRange, Range(0, Max))));
+
+  // void FD_CLR(int fd, fd_set *set);
+  addToFunctionSummaryMap("FD_CLR", Summary(NoEvalCall)
+                                        .ArgConstraint(ArgumentCondition(
+                                            0, WithinRange, Range(0, Max)))
+                                        .ArgConstraint(NotNull(ArgNo(1))));
+
+  // int FD_ISSET(int fd, fd_set *set);
+  addToFunctionSummaryMap(
+      "FD_ISSET",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max)))
+          .ArgConstraint(NotNull(ArgNo(1))));
+
+  // void FD_SET(int fd, fd_set *set);
+  addToFunctionSummaryMap("FD_SET", Summary(NoEvalCall)
+                                        .ArgConstraint(ArgumentCondition(
+                                            0, WithinRange, Range(0, Max)))
+                                        .ArgConstraint(NotNull(ArgNo(1))));
+
+  // void FD_ZERO(fd_set *set);
+  addToFunctionSummaryMap("FD_ZERO",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int fdatasync(int fildes);
+  addToFunctionSummaryMap(
+      "fdatasync",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max))));
+
+  // int fnmatch(const char *pattern, const char *string, int flags);
+  addToFunctionSummaryMap("fnmatch", Summary(EvalCallAsPure)
+                                         .ArgConstraint(NotNull(ArgNo(0)))
+                                         .ArgConstraint(NotNull(ArgNo(1))));
+
+  // int fsync(int fildes);
+  addToFunctionSummaryMap("fsync", Summary(NoEvalCall)
+                                       .ArgConstraint(ArgumentCondition(
+                                           0, WithinRange, Range(0, Max))));
+
+  // int truncate(const char *path, off_t length);    int ftruncate(int fd,
+  // off_t length);
+  addToFunctionSummaryMap("truncate",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int flock(int fd, int operation);
+  addToFunctionSummaryMap("flock", Summary(NoEvalCall)
+                                       .ArgConstraint(ArgumentCondition(
+                                           0, WithinRange, Range(0, Max))));
+
+  // int lockf(int fd, int cmd, off_t len);
+  addToFunctionSummaryMap("lockf", Summary(NoEvalCall)
+                                       .ArgConstraint(ArgumentCondition(
+                                           0, WithinRange, Range(0, Max))));
+
+  // int symlinkat(const char *oldpath, int newdirfd, const char *newpath);
+  addToFunctionSummaryMap("symlinkat", Summary(NoEvalCall)
+                                           .ArgConstraint(NotNull(ArgNo(0)))
+                                           .ArgConstraint(NotNull(ArgNo(2))));
+
+  // int symlink(const char *oldpath, const char *newpath);
+  addToFunctionSummaryMap("symlink", Summary(NoEvalCall)
+                                         .ArgConstraint(NotNull(ArgNo(0)))
+                                         .ArgConstraint(NotNull(ArgNo(1))));
+
+  // void *dlopen(const char *file, int mode);    int open(const char *pathname,
+  // int flags)    int open(const char *pathname, int flags, mode_t mode); FILE
+  // *popen(const char *command, const char *type);    FILE *fdopen(int fd,
+  // const char *mode);    mqd_t mq_open(const char *name, int oflag, ...); DBM
+  // *dbm_open(const char *file, int open_flags, mode_t file_mode);    nl_catd
+  // catopen(const char *name, int oflag);
+  addToFunctionSummaryMap("open",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int openat(int dirfd, const char *pathname, int flags);    int openat(int
+  // dirfd, const char *pathname, int flags, mode_t mode);
+  addToFunctionSummaryMap("openat",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(1))));
+
+  // int creat(const char *pathname, mode_t mode);
+  addToFunctionSummaryMap("creat",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // unsigned int sleep(unsigned int seconds);    int usleep(useconds_t
+  // useconds); The obsolescent function 'usleep' is called. POSIX.1-2001
+  // declares usleep() function obsolescent and POSIX.1-2008 removes it. It is
+  // recommended that new applications use the 'nanosleep' or 'setitimer'
+  // function.</warn>   int nanosleep(const struct timespec *rqtp, struct
+  // timespec *rmtp);
+  addToFunctionSummaryMap("sleep", Summary(NoEvalCall)
+                                       .ArgConstraint(ArgumentCondition(
+                                           0, WithinRange, Range(0, Max))));
+
+  // int usleep(useconds_t useconds); The obsolescent function 'usleep' is
+  // called. POSIX.1-2001 declares usleep() function obsolescent and
+  // POSIX.1-2008 removes it. It is recommended that new applications use the
+  // 'nanosleep' or 'setitimer' function.</warn>
+  addToFunctionSummaryMap("usleep", Summary(NoEvalCall)
+                                        .ArgConstraint(ArgumentCondition(
+                                            0, WithinRange, Range(0, 1000000))));
+
+  // int dirfd(DIR *dirp);
+  addToFunctionSummaryMap("dirfd",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int faccessat(int dirfd, const char *pathname, int mode, int flags);
+  addToFunctionSummaryMap("faccessat",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(1))));
+
+  // unsigned int alarm(unsigned int seconds);    useconds_t ualarm(useconds_t
+  // useconds, useconds_t interval);
+  addToFunctionSummaryMap("alarm", Summary(NoEvalCall)
+                                       .ArgConstraint(ArgumentCondition(
+                                           0, WithinRange, Range(0, Max))));
+
+  // struct rpcent *getrpcbyname(char *name);
+  addToFunctionSummaryMap("getrpcbyname",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // struct protoent *getprotobyname(const char *name);
+  addToFunctionSummaryMap("getprotobyname",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // struct servent *getservbyname(const char *name, const char *proto);
+  addToFunctionSummaryMap("getservbyname",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // struct netent *getnetbyname(const char *name);
+  addToFunctionSummaryMap("getnetbyname",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // struct hostent *gethostbyname(const char *name);
+  addToFunctionSummaryMap("gethostbyname",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // struct hostent *gethostbyname2(const char *name, int af);
+  addToFunctionSummaryMap("gethostbyname2",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type);
+  addToFunctionSummaryMap("gethostbyaddr",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int brk(void *addr);    void *sbrk(intptr_t incr);
+  addToFunctionSummaryMap("brk",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int closedir(DIR *dir);
+  addToFunctionSummaryMap("closedir",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // char *strfry(char *string);
+  addToFunctionSummaryMap("strfry",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // char *strsep(char **stringp, const char *delim);
+  addToFunctionSummaryMap("strsep", Summary(NoEvalCall)
+                                        .ArgConstraint(NotNull(ArgNo(0)))
+                                        .ArgConstraint(NotNull(ArgNo(1))));
+
+  // char *strdup(const char *s);
+  addToFunctionSummaryMap("strdup",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // char *strndup(const char *s, size_t n);
+  addToFunctionSummaryMap(
+      "strndup",
+      Summary(NoEvalCall)
+          .ArgConstraint(NotNull(ArgNo(0)))
+          .ArgConstraint(ArgumentCondition(1, WithinRange, Range(0, Max))));
+
+  // wchar_t *wcsdup(const wchar_t *s);
+  addToFunctionSummaryMap("wcsdup",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int mkstemp(char *template);
+  addToFunctionSummaryMap("mkstemp",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // char *mkdtemp(char *template);
+  addToFunctionSummaryMap("mkdtemp",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // char *mktemp(char *template);
+  addToFunctionSummaryMap("mktemp",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // char *getcwd(char *buf, size_t size);
+  addToFunctionSummaryMap(
+      "getcwd",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(1, WithinRange, Range(0, Max))));
+
+  // int mkdir(const char *pathname, mode_t mode);
+  addToFunctionSummaryMap("mkdir",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int mknod(const char *pathname, mode_t mode, dev_t dev);
+  addToFunctionSummaryMap("mknod",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int mknodat(int dirfd, const char *pathname, mode_t mode, dev_t dev);
+  addToFunctionSummaryMap("mknodat",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(1))));
+
+  // int mkdirat(int dirfd, const char *pathname, mode_t mode);
+  addToFunctionSummaryMap("mkdirat",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(1))));
+
+  // int fchmodat(int dirfd, const char *pathname, mode_t mode, int flags);
+  addToFunctionSummaryMap("fchmodat",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(1))));
+
+  // int fchownat(int dirfd, const char *pathname, uid_t owner, gid_t group, int
+  // flags);
+  addToFunctionSummaryMap("fchownat",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(1))));
+
+  // int rmdir(const char *pathname);
+  addToFunctionSummaryMap("rmdir",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int chdir(const char *path);
+  addToFunctionSummaryMap("chdir",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int chroot(const char *path);
+  addToFunctionSummaryMap("chroot",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int symlink(const char *oldpath, const char *newpath);    int link(const
+  // char *oldpath, const char *newpath);    int unlink(const char *pathname);
+  // int mq_unlink(const char *name);    ssize_t readlink(const char *path, char
+  // *buf, size_t bufsiz);
+  addToFunctionSummaryMap("link", Summary(NoEvalCall)
+                                      .ArgConstraint(NotNull(ArgNo(0)))
+                                      .ArgConstraint(NotNull(ArgNo(1))));
+
+  // int symlinkat(const char *oldpath, int newdirfd, const char *newpath); int
+  // linkat(int fd1, const char *path1, int fd2, const char *path2, int flag);
+  // int unlinkat(int fd, const char *path, int flag);    int readlinkat(int
+  // dirfd, const char *pathname, char *buf, size_t bufsiz);
+  addToFunctionSummaryMap("linkat", Summary(NoEvalCall)
+                                        .ArgConstraint(NotNull(ArgNo(1)))
+                                        .ArgConstraint(NotNull(ArgNo(3))));
+
+  // int unlinkat(int fd, const char *path, int flag);
+  addToFunctionSummaryMap("unlinkat",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(1))));
+
+  // int unlink(const char *pathname);    int mq_unlink(const char *name);
+  addToFunctionSummaryMap("unlink",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int stat(const char *file_name, struct stat *buf);
+  addToFunctionSummaryMap("stat", Summary(NoEvalCall)
+                                      .ArgConstraint(NotNull(ArgNo(0)))
+                                      .ArgConstraint(NotNull(ArgNo(1))));
+
+  // int lstat(const char *file_name, struct stat *buf);
+  addToFunctionSummaryMap("lstat", Summary(NoEvalCall)
+                                       .ArgConstraint(NotNull(ArgNo(0)))
+                                       .ArgConstraint(NotNull(ArgNo(1))));
+
+  // int fstat(int fd, struct stat *statbuf);
+  addToFunctionSummaryMap("fstat", Summary(NoEvalCall)
+                                       .ArgConstraint(NotNull(ArgNo(1))));
+
+  // int fstatat(int dirfd, const char *pathname, struct stat *statbuf, int
+  // flags);    Note: fstatat64() is a large-file version of the fstatat()
+  // function as defined in POSIX 1003.1-2008 (ISO/IEC 9945-2009).
+  addToFunctionSummaryMap("fstatat", Summary(NoEvalCall)
+                                         .ArgConstraint(NotNull(ArgNo(1)))
+                                         .ArgConstraint(NotNull(ArgNo(2))));
+
+  // Note: fstatat64() is a large-file version of the fstatat() function as
+  // defined in POSIX 1003.1-2008 (ISO/IEC 9945-2009).    int fstatat64(int
+  // dirfd, const char *pathname, struct stat64  *statbuf, int flags);
+  addToFunctionSummaryMap("fstatat64", Summary(NoEvalCall)
+                                           .ArgConstraint(NotNull(ArgNo(1)))
+                                           .ArgConstraint(NotNull(ArgNo(2))));
+
+  // int __fxstatat64 (int __ver, int __fildes, const char *__filename,
+  //			 struct stat64 *__stat_buf, int __flag)
+  addToFunctionSummaryMap("__fxstatat64",
+                          Summary(NoEvalCall)
+                              .ArgConstraint(NotNull(ArgNo(2)))
+                              .ArgConstraint(NotNull(ArgNo(3))));
+
+  // int chmod(const char *path, mode_t mode);    int fchmod(int fildes, mode_t
+  // mode);
+  addToFunctionSummaryMap("chmod",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int fchmod(int fildes, mode_t mode);
+  addToFunctionSummaryMap(
+      "fchmod",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max))));
+
+  // int chown(const char *path, uid_t owner, gid_t group);    int lchown(const
+  // char *path, uid_t owner, gid_t group);    int fchown(int fildes, uid_t
+  // owner, gid_t group);
+  addToFunctionSummaryMap("chown",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int lchown(const char *path, uid_t owner, gid_t group);
+  addToFunctionSummaryMap("lchown",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int fchown(int fildes, uid_t owner, gid_t group);
+  addToFunctionSummaryMap(
+      "fchown",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max))));
+
+  // int utime(const char *filename, struct utimbuf *buf);
+  addToFunctionSummaryMap("utime",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int futimens(int fd, const struct timespec times[2]);
+  addToFunctionSummaryMap(
+      "futimens",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max))));
+
+  // int utimensat(int dirfd, const char *pathname, const struct timespec
+  // times[2], int flags);
+  addToFunctionSummaryMap("utimensat",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(1))));
+
+  // int utimes(const char *filename, const struct timeval times[2]);
+  addToFunctionSummaryMap("utimes",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // DIR *opendir(const char *name);    DIR *fdopendir(int fd);
+  addToFunctionSummaryMap("opendir",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // DIR *fdopendir(int fd);
+  addToFunctionSummaryMap(
+      "fdopendir",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max))));
+
+  // int isatty(int fildes);
+  addToFunctionSummaryMap(
+      "isatty",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max))));
+
+  // FILE *popen(const char *command, const char *type);
+  addToFunctionSummaryMap("popen", Summary(NoEvalCall)
+                                       .ArgConstraint(NotNull(ArgNo(0)))
+                                       .ArgConstraint(NotNull(ArgNo(1))));
+
+  // int pclose(FILE *stream);
+  addToFunctionSummaryMap("pclose",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int setsockopt(int socket, int level, int option_name,
+  addToFunctionSummaryMap(
+      "setsockopt",
+      Summary(NoEvalCall)
+          .ArgConstraint(NotNull(ArgNo(3)))
+          .ArgConstraint(BufferSize(3, 4))
+          .ArgConstraint(ArgumentCondition(4, WithinRange, Range(0, Max))));
+
+  // int getsockopt(int socket, int level, int option_name,
+  addToFunctionSummaryMap("getsockopt", Summary(NoEvalCall)
+                                            .ArgConstraint(NotNull(ArgNo(3)))
+                                            .ArgConstraint(NotNull(ArgNo(4))));
+
+  // int dlclose(void *handle);    int pclose(FILE *stream);    int close(int
+  // fildes);    int mq_close(mqd_t);    void dbm_close(DBM *db);    int
+  // catclose(nl_catd catd);
+  addToFunctionSummaryMap("close", Summary(NoEvalCall)
+                                       .ArgConstraint(ArgumentCondition(
+                                           0, WithinRange, Range(0, Max))));
+
+  // size_t confstr(int, char *, size_t);
+  addToFunctionSummaryMap(
+      "confstr",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(2, WithinRange, Range(0, Max))));
+
+  // long int fpathconf(int fildes, int name);
+  addToFunctionSummaryMap(
+      "fpathconf",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max))));
+
+  // long int fpathconf(int fildes, int name);    long int pathconf(const char
+  // *path, int name);
+  addToFunctionSummaryMap("pathconf",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // FILE *fdopen(int fd, const char *mode);
+  addToFunctionSummaryMap("fdopen", Summary(NoEvalCall)
+                                        .ArgConstraint(ArgumentCondition(
+                                            0, WithinRange, Range(0, Max)))
+                                        .ArgConstraint(NotNull(ArgNo(1))));
+
+  // void rewinddir(DIR *dir);
+  addToFunctionSummaryMap("rewinddir",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // void seekdir(DIR *dirp, long loc);
+  addToFunctionSummaryMap("seekdir",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int rand_r(unsigned int *seedp);
+  addToFunctionSummaryMap("rand_r",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int strcasecmp(const char *s1, const char *s2);
+  addToFunctionSummaryMap("strcasecmp", Summary(EvalCallAsPure)
+                                            .ArgConstraint(NotNull(ArgNo(0)))
+                                            .ArgConstraint(NotNull(ArgNo(1))));
+
+  // int strncasecmp(const char *s1, const char *s2, size_t n);
+  addToFunctionSummaryMap(
+      "strncasecmp",
+      Summary(EvalCallAsPure)
+          .ArgConstraint(NotNull(ArgNo(0)))
+          .ArgConstraint(NotNull(ArgNo(1)))
+          .ArgConstraint(ArgumentCondition(2, WithinRange, Range(0, Max))));
+
+  // ssize_t sendfile(int out_fd, int in_fd, off_t *offset, size_t count);
+  addToFunctionSummaryMap(
+      "sendfile",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max)))
+          .ArgConstraint(ArgumentCondition(1, WithinRange, Range(0, Max)))
+          .ArgConstraint(ArgumentCondition(3, WithinRange, Range(1, Max))));
+
+  // ssize_t read(int fd, void *buf, size_t count);
+  //addToFunctionSummaryMap(
+      //"read",
+      //Summary(NoEvalCall)
+          //.ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max)))
+          //.ArgConstraint(BufferSize(1, 2))
+          //.ArgConstraint(ArgumentCondition(2, WithinRange, Range(0, Max))));
+
+  //// ssize_t write(int fildes, const void *buf, size_t nbyte);
+  //addToFunctionSummaryMap(
+      //"write",
+      //Summary(NoEvalCall)
+          //.ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max)))
+          //.ArgConstraint(BufferSize(1, 2))
+          //.ArgConstraint(ArgumentCondition(2, WithinRange, Range(0, Max))));
+
+  // ssize_t recv(int sockfd, void *buf, size_t len, int flags);
+  addToFunctionSummaryMap("recv", Summary(NoEvalCall)
+                                      .ArgConstraint(ArgumentCondition(
+                                          0, WithinRange, Range(0, Max)))
+                                      .ArgConstraint(BufferSize(1, 2)));
+
+  // ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
+  addToFunctionSummaryMap(
+      "recvfrom",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max)))
+          .ArgConstraint(BufferSize(1, 2)));
+
+  // ssize_t recvmsg(int sockfd, struct msghdr *msg, int flags);
+  addToFunctionSummaryMap(
+      "recvmsg",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max))));
+
+  // ssize_t send(int sockfd, const void *buf, size_t len, int flags);    int
+  // mq_send(mqd_t mqdes, const char *msg_ptr, size_t msg_len, unsigned
+  // msg_prio);    int mq_timedsend(mqd_t mqdes, const char *msg_ptr, size_t
+  // msg_len, unsigned msg_prio, const struct timespec *abstime);
+  addToFunctionSummaryMap("send", Summary(NoEvalCall)
+                                      .ArgConstraint(ArgumentCondition(
+                                          0, WithinRange, Range(0, Max)))
+                                      .ArgConstraint(BufferSize(1, 2)));
+
+  // ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
+  addToFunctionSummaryMap("sendto", Summary(NoEvalCall)
+                                        .ArgConstraint(ArgumentCondition(
+                                            0, WithinRange, Range(0, Max)))
+                                        .ArgConstraint(BufferSize(1, 2)));
+
+  // ssize_t sendmsg(int sockfd, const struct msghdr *msg, int flags);
+  addToFunctionSummaryMap(
+      "sendmsg",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max))));
+
+  // void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t
+  // offset);
+  addToFunctionSummaryMap(
+      "mmap",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(1, WithinRange, Range(1, Max)))
+          .ArgConstraint(ArgumentCondition(4, WithinRange, Range(0, Max))));
+
+  // void *mmap64(void *addr, size_t length, int prot, int flags, int fd,
+  // off64_t offset);
+  addToFunctionSummaryMap(
+      "mmap64",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(1, WithinRange, Range(1, Max)))
+          .ArgConstraint(ArgumentCondition(4, WithinRange, Range(0, Max))));
+
+  // int munmap(void *addr, size_t length);
+  addToFunctionSummaryMap(
+      "munmap",
+      Summary(NoEvalCall)
+          .ArgConstraint(NotNull(ArgNo(0)))
+          .ArgConstraint(ArgumentCondition(1, WithinRange, Range(1, Max))));
+
+  // int fcntl(int fd, int cmd, ... /* arg */ );
+  addToFunctionSummaryMap("fcntl", Summary(NoEvalCall)
+                                       .ArgConstraint(ArgumentCondition(
+                                           0, WithinRange, Range(0, Max))));
+
+  // int ioctl(int fd, unsigned long request, ...);
+  addToFunctionSummaryMap("ioctl", Summary(NoEvalCall)
+                                       .ArgConstraint(ArgumentCondition(
+                                           0, WithinRange, Range(0, Max))));
+
+  // int socketpair(int domain, int type, int protocol, int sv[2]);
+  addToFunctionSummaryMap("socketpair",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(3))));
+
+  // int pipe(int fildes[2]);
+  addToFunctionSummaryMap("pipe",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // char *getwd(char *path_name);
+  addToFunctionSummaryMap("getwd",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int mq_notify(mqd_t, const struct sigevent *);
+  addToFunctionSummaryMap("mq_notify",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // ssize_t mq_receive(mqd_t mqdes, char *msg_ptr, size_t msg_len, unsigned
+  // *msg_prio);
+  addToFunctionSummaryMap(
+      "mq_receive",
+      Summary(NoEvalCall)
+          .ArgConstraint(BufferSize(1, 2))
+          .ArgConstraint(ArgumentCondition(2, WithinRange, Range(0, Max))));
+
+  // int mq_send(mqd_t mqdes, const char *msg_ptr, size_t msg_len, unsigned
+  // msg_prio);
+  addToFunctionSummaryMap("mq_send",
+                          Summary(NoEvalCall).ArgConstraint(BufferSize(1, 2)));
+
+  // ssize_t mq_timedreceive(mqd_t mqdes, char *restrict msg_ptr, size_t
+  // msg_len, unsigned *restrict msg_prio, const struct timespec *restrict
+  // abstime);
+  addToFunctionSummaryMap("mq_timedreceive",
+                          Summary(NoEvalCall).ArgConstraint(BufferSize(1, 2)));
+
+  // int mq_timedsend(mqd_t mqdes, const char *msg_ptr, size_t msg_len, unsigned
+  // msg_prio, const struct timespec *abstime);
+  addToFunctionSummaryMap("mq_timedsend",
+                          Summary(NoEvalCall).ArgConstraint(BufferSize(1, 2)));
+
+  // int mq_unlink(const char *name);
+  addToFunctionSummaryMap("mq_unlink",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int dbm_clearerr(DBM *db);
+  addToFunctionSummaryMap("dbm_clearerr",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // void dbm_close(DBM *db);
+  addToFunctionSummaryMap("dbm_close",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int dbm_delete(DBM *db, datum key);
+  addToFunctionSummaryMap("dbm_delete",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int dbm_error(DBM *db);
+  addToFunctionSummaryMap("dbm_error",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // datum dbm_fetch(DBM *db, datum key);
+  addToFunctionSummaryMap("dbm_fetch",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // datum dbm_firstkey(DBM *db);
+  addToFunctionSummaryMap("dbm_firstkey",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // datum dbm_nextkey(DBM *db);
+  addToFunctionSummaryMap("dbm_nextkey",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // DBM *dbm_open(const char *file, int open_flags, mode_t file_mode);
+  addToFunctionSummaryMap("dbm_open",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int dbm_store(DBM *db, datum key, datum content, int store_mode);
+  addToFunctionSummaryMap("dbm_store",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // void freeaddrinfo(struct addrinfo *ai);
+  addToFunctionSummaryMap("freeaddrinfo",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int getnameinfo(const struct sockaddr *restrict sa,
+  addToFunctionSummaryMap(
+      "getnameinfo",
+      Summary(NoEvalCall)
+          .ArgConstraint(BufferSize(0, 1))
+          .ArgConstraint(ArgumentCondition(1, WithinRange, Range(0, Max)))
+          .ArgConstraint(BufferSize(2, 3))
+          .ArgConstraint(ArgumentCondition(3, WithinRange, Range(0, Max)))
+          .ArgConstraint(BufferSize(4, 5))
+          .ArgConstraint(ArgumentCondition(5, WithinRange, Range(0, Max))));
+
+  // int uname(struct utsname *buf);
+  addToFunctionSummaryMap("uname",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // char *strtok_r(char *str, const char *delim, char **saveptr);
+  addToFunctionSummaryMap("strtok_r", Summary(EvalCallAsPure)
+                                          .ArgConstraint(NotNull(ArgNo(1)))
+                                          .ArgConstraint(NotNull(ArgNo(2))));
+
+  // int getpwnam_r(const char *name, struct passwd *pwd, char *buffer, size_t
+  // bufsize, struct passwd **result);
+  addToFunctionSummaryMap(
+      "getpwnam_r",
+      Summary(NoEvalCall)
+          .ArgConstraint(BufferSize(2, 3))
+          .ArgConstraint(ArgumentCondition(3, WithinRange, Range(0, Max))));
+
+  // int getpwuid_r(uid_t uid, struct passwd *pwd, char *buffer, size_t bufsize,
+  // struct passwd **result);
+  addToFunctionSummaryMap(
+      "getpwuid_r",
+      Summary(NoEvalCall)
+          .ArgConstraint(BufferSize(2, 3))
+          .ArgConstraint(ArgumentCondition(3, WithinRange, Range(0, Max))));
+
+  // nl_catd catopen(const char *name, int oflag);
+  addToFunctionSummaryMap("catopen",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int regcomp(regex_t *restrict preg, const char *restrict pattern, int
+  // cflags);
+  addToFunctionSummaryMap("regcomp",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // size_t regerror(int errcode, const regex_t *restrict preg, char *restrict
+  // errbuf, size_t errbuf_size);
+  addToFunctionSummaryMap(
+      "regerror",
+      Summary(NoEvalCall)
+          .ArgConstraint(BufferSize(2, 3))
+          .ArgConstraint(ArgumentCondition(3, WithinRange, Range(0, Max))));
+
+  // int regexec(const regex_t *restrict preg, const char *restrict string,
+  // size_t nmatch, regmatch_t pmatch[restrict], int eflags);
+  addToFunctionSummaryMap(
+      "regexec",
+      Summary(NoEvalCall)
+          .ArgConstraint(NotNull(ArgNo(0)))
+          .ArgConstraint(NotNull(ArgNo(1)))
+          .ArgConstraint(ArgumentCondition(2, WithinRange, Range(0, Max))));
+
+  // void regfree(regex_t *preg);
+  addToFunctionSummaryMap("regfree",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int sched_getparam(pid_t pid, struct sched_param *param);
+  addToFunctionSummaryMap(
+      "sched_getparam",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max)))
+          .ArgConstraint(NotNull(ArgNo(1))));
+
+  // int sched_getscheduler(pid_t pid);
+  addToFunctionSummaryMap(
+      "sched_getscheduler",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max))));
+
+  // int sched_rr_get_interval(pid_t pid, struct timespec *interval);
+  addToFunctionSummaryMap("sched_rr_get_interval",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(1))));
+
+  // int sched_setscheduler(pid_t pid, int policy, const struct sched_param
+  // *param);
+  addToFunctionSummaryMap(
+      "sched_setscheduler",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max))));
+
+  // char *ecvt(double value, int ndigit, int *restrict decpt, int *restrict
+  // sign);
+  addToFunctionSummaryMap("ecvt", Summary(NoEvalCall)
+                                      .ArgConstraint(NotNull(ArgNo(2)))
+                                      .ArgConstraint(NotNull(ArgNo(3))));
+
+  // char *fcvt(double value, int ndigit, int *restrict decpt, int *restrict
+  // sign);
+  addToFunctionSummaryMap("fcvt", Summary(NoEvalCall)
+                                      .ArgConstraint(NotNull(ArgNo(2)))
+                                      .ArgConstraint(NotNull(ArgNo(3))));
+
+  // char *gcvt(double value, int ndigit, char *buf);
+  addToFunctionSummaryMap("gcvt",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(2))));
+
+  // off_t lseek(int fildes, off_t offset, int whence);
+  addToFunctionSummaryMap("lseek", Summary(NoEvalCall)
+                                       .ArgConstraint(ArgumentCondition(
+                                           0, WithinRange, Range(0, Max))));
+
+  // int nanosleep(const struct timespec *rqtp, struct timespec *rmtp);
+  addToFunctionSummaryMap("nanosleep",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // void setkey(const char *key);
+  addToFunctionSummaryMap("setkey",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // char *getpass(const char *prompt);
+  addToFunctionSummaryMap("getpass",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int putenv(char *string);
+  addToFunctionSummaryMap("putenv",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int setenv(const char *envname, const char *envval, int overwrite);    int
+  // unsetenv(const char *name);
+  addToFunctionSummaryMap("setenv", Summary(NoEvalCall)
+                                        .ArgConstraint(NotNull(ArgNo(0)))
+                                        .ArgConstraint(NotNull(ArgNo(1))));
+
+  // int unsetenv(const char *name);
+  addToFunctionSummaryMap("unsetenv",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // struct tm *localtime_r(const time_t *timep, struct tm *result);
+  addToFunctionSummaryMap("localtime_r", Summary(NoEvalCall)
+                                             .ArgConstraint(NotNull(ArgNo(0)))
+                                             .ArgConstraint(NotNull(ArgNo(1))));
+
+  // struct dirent *readdir(DIR *dirp);
+  addToFunctionSummaryMap("readdir",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int readdir_r(DIR *dirp, struct dirent *entry, struct dirent **result);
+  addToFunctionSummaryMap("readdir_r", Summary(NoEvalCall)
+                                           .ArgConstraint(NotNull(ArgNo(0)))
+                                           .ArgConstraint(NotNull(ArgNo(1)))
+                                           .ArgConstraint(NotNull(ArgNo(2))));
+
+  // ssize_t readlink(const char *path, char *buf, size_t bufsiz);
+  addToFunctionSummaryMap(
+      "readlink",
+      Summary(NoEvalCall)
+          .ArgConstraint(NotNull(ArgNo(0)))
+          .ArgConstraint(NotNull(ArgNo(1)))
+          .ArgConstraint(BufferSize(1, 2))
+          .ArgConstraint(ArgumentCondition(2, WithinRange, Range(0, Max))));
+
+  // int renameat(int olddirfd, const char *oldpath, int newdirfd, const char
+  // *newpath);
+  addToFunctionSummaryMap("renameat", Summary(NoEvalCall)
+                                          .ArgConstraint(NotNull(ArgNo(1)))
+                                          .ArgConstraint(NotNull(ArgNo(3))));
+
+  // int readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsiz);
+  addToFunctionSummaryMap(
+      "readlinkat",
+      Summary(NoEvalCall)
+          .ArgConstraint(NotNull(ArgNo(1)))
+          .ArgConstraint(NotNull(ArgNo(2)))
+          .ArgConstraint(BufferSize(2, 3))
+          .ArgConstraint(ArgumentCondition(3, WithinRange, Range(0, Max))));
+
+  // char *asctime_r(const struct tm *tm, char *buf);
+  addToFunctionSummaryMap("asctime_r", Summary(NoEvalCall)
+                                           .ArgConstraint(NotNull(ArgNo(0)))
+                                           .ArgConstraint(NotNull(ArgNo(1))));
+
+  // char *asctime_r(const struct tm *tm, char *buf);    char *ctime_r(const
+  // time_t *timep, char *buf);
+  addToFunctionSummaryMap("ctime_r", Summary(NoEvalCall)
+                                         .ArgConstraint(NotNull(ArgNo(0)))
+                                         .ArgConstraint(NotNull(ArgNo(1))));
+
+  // struct tm *gmtime_r(const time_t *timep, struct tm *result);
+  addToFunctionSummaryMap("gmtime_r", Summary(NoEvalCall)
+                                          .ArgConstraint(NotNull(ArgNo(0)))
+                                          .ArgConstraint(NotNull(ArgNo(1))));
+
+  // struct tm * gmtime(const time_t *tp);
+  addToFunctionSummaryMap("gmtime",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int clock_gettime(clockid_t clock_id, struct timespec *tp);
+  addToFunctionSummaryMap("clock_gettime",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(1))));
+
+  // void makecontext(ucontext_t *ucp, void (*func)(), int argc, ...);
+  addToFunctionSummaryMap("makecontext", Summary(NoEvalCall)
+                                             .ArgConstraint(NotNull(ArgNo(0)))
+                                             .ArgConstraint(NotNull(ArgNo(1))));
+
+  // void swapcontext(ucontext_t *restrict oucp, const ucontext_t *restrict
+  // ucp);
+  addToFunctionSummaryMap("swapcontext", Summary(NoEvalCall)
+                                             .ArgConstraint(NotNull(ArgNo(0)))
+                                             .ArgConstraint(NotNull(ArgNo(1))));
+
+  // void getcontext(ucontext_t *ucp);
+  addToFunctionSummaryMap("getcontext",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // void bcopy(const void *s1, void *s2, size_t n);
+  addToFunctionSummaryMap("bcopy", Summary(NoEvalCall)
+                                       .ArgConstraint(NotNull(ArgNo(0)))
+                                       .ArgConstraint(BufferSize(0, 2))
+                                       .ArgConstraint(NotNull(ArgNo(1)))
+                                       .ArgConstraint(BufferSize(1, 2))
+                                       .ArgConstraint(ArgumentCondition(
+                                           2, WithinRange, Range(0, Max))));
+
+  // int bcmp(const void *s1, const void *s2, size_t n);
+  addToFunctionSummaryMap("bcmp", Summary(NoEvalCall)
+                                      .ArgConstraint(NotNull(ArgNo(0)))
+                                      .ArgConstraint(NotNull(ArgNo(1)))
+                                      .ArgConstraint(ArgumentCondition(
+                                          2, WithinRange, Range(0, Max))));
+
+  // void bzero(void *s, size_t n);
+  addToFunctionSummaryMap("bzero", Summary(NoEvalCall)
+                                       .ArgConstraint(NotNull(ArgNo(0)))
+                                       .ArgConstraint(ArgumentCondition(
+                                           1, WithinRange, Range(0, Max))));
+
+  // int ftime(struct timeb *tp);
+  addToFunctionSummaryMap("ftime",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // wchar_t *wcswcs(const wchar_t *ws1, const wchar_t *ws2);
+  addToFunctionSummaryMap("wcswcs", Summary(NoEvalCall)
+                                        .ArgConstraint(NotNull(ArgNo(0)))
+                                        .ArgConstraint(NotNull(ArgNo(1))));
+
+  // char *stpcpy(char *desstr, const char *srcstr);
+  addToFunctionSummaryMap("stpcpy", Summary(NoEvalCall)
+                                        .ArgConstraint(NotNull(ArgNo(0)))
+                                        .ArgConstraint(NotNull(ArgNo(1))));
+
+  // char *index(const char *s, int c);    char *rindex(const char *s, int c);
+  addToFunctionSummaryMap("index",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // char *rindex(const char *s, int c);
+  addToFunctionSummaryMap("rindex",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int pthread_cond_signal(pthread_cond_t *cond);
+  addToFunctionSummaryMap("pthread_cond_signal",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int pthread_cond_broadcast(pthread_cond_t *cond);
+  addToFunctionSummaryMap("pthread_cond_broadcast",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int pthread_create(pthread_t * thread, const pthread_attr_t * attr, void
+  // *(*start_routine)(void*), void * arg);
+  addToFunctionSummaryMap("pthread_create",
+                          Summary(NoEvalCall)
+                              .ArgConstraint(NotNull(ArgNo(0)))
+                              .ArgConstraint(NotNull(ArgNo(2))));
+
+  // int pthread_attr_destroy(pthread_attr_t *attr);
+  addToFunctionSummaryMap("pthread_attr_destroy",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int pthread_attr_init(pthread_attr_t *attr);
+  addToFunctionSummaryMap("pthread_attr_init",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int pthread_attr_setstackaddr(pthread_attr_t *attr, void *stackaddr);
+  addToFunctionSummaryMap("pthread_attr_setstackaddr",
+                          Summary(NoEvalCall)
+                              .ArgConstraint(NotNull(ArgNo(0)))
+                              .ArgConstraint(NotNull(ArgNo(1))));
+
+  // int pthread_attr_getstackaddr(const pthread_attr_t *attr, void
+  // **stackaddr);
+  addToFunctionSummaryMap("pthread_attr_getstackaddr",
+                          Summary(NoEvalCall)
+                              .ArgConstraint(NotNull(ArgNo(0)))
+                              .ArgConstraint(NotNull(ArgNo(1))));
+
+  // int pthread_attr_setstacksize(pthread_attr_t *attr, size_t stacksize);
+  addToFunctionSummaryMap(
+      "pthread_attr_setstacksize",
+      Summary(NoEvalCall)
+          .ArgConstraint(NotNull(ArgNo(0)))
+          .ArgConstraint(ArgumentCondition(1, WithinRange, Range(0, Max))));
+
+  // int pthread_attr_setguardsize(pthread_attr_t *attr, size_t guardsize);
+  addToFunctionSummaryMap(
+      "pthread_attr_setguardsize",
+      Summary(NoEvalCall)
+          .ArgConstraint(NotNull(ArgNo(0)))
+          .ArgConstraint(ArgumentCondition(1, WithinRange, Range(0, Max))));
+
+  // int pthread_attr_getstacksize(const pthread_attr_t *attr, size_t
+  // *stacksize);
+  addToFunctionSummaryMap("pthread_attr_getstacksize",
+                          Summary(NoEvalCall)
+                              .ArgConstraint(NotNull(ArgNo(0)))
+                              .ArgConstraint(NotNull(ArgNo(1))));
+
+  // int pthread_attr_getguardsize(const pthread_attr_t *attr, size_t
+  // *guardsize);
+  addToFunctionSummaryMap("pthread_attr_getguardsize",
+                          Summary(NoEvalCall)
+                              .ArgConstraint(NotNull(ArgNo(0)))
+                              .ArgConstraint(NotNull(ArgNo(1))));
+
+  // int pthread_mutex_init(pthread_mutex_t *restrict mutex, const
+  // pthread_mutexattr_t *restrict attr);
+  addToFunctionSummaryMap("pthread_mutex_init",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int pthread_mutex_destroy(pthread_mutex_t *mutex);
+  addToFunctionSummaryMap("pthread_mutex_destroy",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int pthread_mutex_lock(pthread_mutex_t *mutex);
+  addToFunctionSummaryMap("pthread_mutex_lock",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int pthread_mutex_trylock(pthread_mutex_t *mutex);
+  addToFunctionSummaryMap("pthread_mutex_trylock",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int pthread_mutex_unlock(pthread_mutex_t *mutex);
+  addToFunctionSummaryMap("pthread_mutex_unlock",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // char *crypt(const char *key, const char *salt);
+  addToFunctionSummaryMap("crypt", Summary(NoEvalCall)
+                                       .ArgConstraint(NotNull(ArgNo(0)))
+                                       .ArgConstraint(NotNull(ArgNo(1))));
+
+  // char *ttyname(int fd);
+  addToFunctionSummaryMap(
+      "ttyname",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max))));
+
+  // char *ttyname(int fd);
+  addToFunctionSummaryMap(
+      "ttyname_r",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max)))
+          .ArgConstraint(NotNull(ArgNo(1)))
+          .ArgConstraint(BufferSize(1, 2))
+          .ArgConstraint(ArgumentCondition(2, WithinRange, Range(0, Max))));
+
+  // struct spwd *getspnam(const char *name);
+  addToFunctionSummaryMap("getspnam",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // struct spwd *fgetspent(FILE *fp);
+  addToFunctionSummaryMap("fgetspent",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // struct spwd *sgetspent(const char *s);
+  addToFunctionSummaryMap("sgetspent",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // struct passwd *fgetpwent(FILE *stream);
+  addToFunctionSummaryMap("fgetpwent",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int getgrent_r(struct group *gbuf, char *buf, size_t buflen, struct group
+  // **gbufp)
+  addToFunctionSummaryMap(
+      "getgrent_r",
+      Summary(NoEvalCall)
+          .ArgConstraint(BufferSize(1, 2))
+          .ArgConstraint(ArgumentCondition(2, WithinRange, Range(0, Max))));
+
+  // struct group *fgetgrent(FILE *stream);
+  addToFunctionSummaryMap("fgetgrent",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int getnetgrent(char **host, char **user, char **domain);
+  addToFunctionSummaryMap("getnetgrent", Summary(NoEvalCall)
+                                             .ArgConstraint(NotNull(ArgNo(0)))
+                                             .ArgConstraint(NotNull(ArgNo(1)))
+                                             .ArgConstraint(NotNull(ArgNo(2))));
+
+  // struct group *getgrnam(const char *name);
+  addToFunctionSummaryMap("getgrnam",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // char *realpath(const char *path, char *resolved_path);
+  addToFunctionSummaryMap("realpath",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // long telldir(DIR *dirp);
+  addToFunctionSummaryMap("telldir",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int scandir(const char *dirp,
+  addToFunctionSummaryMap("scandir", Summary(NoEvalCall)
+                                         .ArgConstraint(NotNull(ArgNo(0)))
+                                         .ArgConstraint(NotNull(ArgNo(1)))
+                                         .ArgConstraint(NotNull(ArgNo(3))));
+
+  // int fileno(FILE *stream);
+  addToFunctionSummaryMap("fileno",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int fseeko(FILE *stream, off_t offset, int whence);
+  addToFunctionSummaryMap("fseeko",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // off_t ftello(FILE *stream);
+  addToFunctionSummaryMap("ftello",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int execv(const char *path, char *const argv[]);
+  addToFunctionSummaryMap("execv",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int execvp(const char *file, char *const argv[]);
+  addToFunctionSummaryMap("execvp",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // size_t strnlen(const char *s, size_t maxlen);
+  addToFunctionSummaryMap(
+      "strnlen",
+      Summary(NoEvalCall)
+          .ArgConstraint(NotNull(ArgNo(0)))
+          .ArgConstraint(ArgumentCondition(1, WithinRange, Range(0, Max))));
+
+  // size_t wcsnlen(const wchar_t *s, size_t maxlen);
+  addToFunctionSummaryMap(
+      "wcsnlen",
+      Summary(NoEvalCall)
+          .ArgConstraint(NotNull(ArgNo(0)))
+          .ArgConstraint(ArgumentCondition(1, WithinRange, Range(0, Max))));
+
+  // int shmget(key_t key, size_t size, int shmflg);
+  addToFunctionSummaryMap(
+      "shmget",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(1, WithinRange, Range(0, Max))));
+
+  // int getrlimit(int resource, struct rlimit *rlim);
+  addToFunctionSummaryMap("getrlimit",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(1))));
+
+  // int setrlimit(int resource, const struct rlimit *rlim);
+  addToFunctionSummaryMap("setrlimit",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(1))));
+
+  // int glob(const char *pattern, int flags, int (*errfunc) (const char *epath,
+  // int eerrno), glob_t *pglob);
+  addToFunctionSummaryMap("glob", Summary(NoEvalCall)
+                                      .ArgConstraint(NotNull(ArgNo(0)))
+                                      .ArgConstraint(NotNull(ArgNo(3))));
+
+  // void globfree(glob_t *pglob)
+  addToFunctionSummaryMap("globfree",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // wchar_t *wcpncpy(wchar_t *dest, const wchar_t *src, size_t n);
+  addToFunctionSummaryMap(
+      "wcpncpy",
+      Summary(NoEvalCall)
+          .ArgConstraint(NotNull(ArgNo(0)))
+          .ArgConstraint(BufferSize(0, 2))
+          .ArgConstraint(NotNull(ArgNo(1)))
+          .ArgConstraint(ArgumentCondition(2, WithinRange, Range(0, Max))));
+
+  // char *stpncpy(char *dest, const char *src, size_t n);
+  addToFunctionSummaryMap(
+      "stpncpy",
+      Summary(NoEvalCall)
+          .ArgConstraint(NotNull(ArgNo(0)))
+          .ArgConstraint(BufferSize(0, 2))
+          .ArgConstraint(NotNull(ArgNo(1)))
+          .ArgConstraint(ArgumentCondition(2, WithinRange, Range(0, Max))));
+
+  // void *memccpy(void *dest, const void *src, int c, size_t n);
+  addToFunctionSummaryMap(
+      "memccpy",
+      Summary(NoEvalCall)
+          .ArgConstraint(NotNull(ArgNo(0)))
+          .ArgConstraint(NotNull(ArgNo(1)))
+          .ArgConstraint(ArgumentCondition(2, WithinRange, Range(0, Max)))
+          .ArgConstraint(ArgumentCondition(3, WithinRange, Range(0, Max))));
+
+  // int getopt(int argc, char * const argv[], const char *optstring);
+  addToFunctionSummaryMap("getopt", Summary(NoEvalCall)
+                                        .ArgConstraint(ArgumentCondition(
+                                            0, WithinRange, Range(0, Max)))
+                                        .ArgConstraint(NotNull(ArgNo(1)))
+                                        .ArgConstraint(NotNull(ArgNo(2))));
+
+  // int getitimer(int which, struct itimerval *curr_value);
+  addToFunctionSummaryMap("getitimer",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(1))));
+
+  // int sigsuspend(const sigset_t *mask);
+  addToFunctionSummaryMap("sigsuspend",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int getrusage(int who, struct rusage *usage);
+  addToFunctionSummaryMap("getrusage",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(1))));
+
+  // int sigemptyset(sigset_t *set);
+  addToFunctionSummaryMap("sigemptyset",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int sigfillset(sigset_t *set);
+  addToFunctionSummaryMap("sigfillset",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int sigaddset(sigset_t *set, int signum);
+  addToFunctionSummaryMap("sigaddset",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int sigdelset(sigset_t *set, int signum);
+  addToFunctionSummaryMap("sigdelset",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int sigismember(const sigset_t *set, int signum);
+  addToFunctionSummaryMap("sigismember",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // ssize_t msgrcv(int msqid, void *msgp, size_t msgsz, long msgtyp,
+  addToFunctionSummaryMap(
+      "msgrcv",
+      Summary(NoEvalCall)
+          .ArgConstraint(NotNull(ArgNo(1)))
+          .ArgConstraint(BufferSize(1, 2))
+          .ArgConstraint(ArgumentCondition(2, WithinRange, Range(0, Max))));
+
+  // int msgsnd(int msqid, const void *msgp, size_t msgsz, int msgflg);
+  addToFunctionSummaryMap(
+      "msgsnd",
+      Summary(NoEvalCall)
+          .ArgConstraint(NotNull(ArgNo(1)))
+          .ArgConstraint(BufferSize(1, 2))
+          .ArgConstraint(ArgumentCondition(2, WithinRange, Range(0, Max))));
+
+  // int tcflow(int fildes, int action);
+  addToFunctionSummaryMap(
+      "tcflow",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max))));
+
+  // int tcflush(int fildes, int queue_selector);
+  addToFunctionSummaryMap(
+      "tcflush",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max))));
+
+  // int tcsendbreak(int fildes, int duration);
+  addToFunctionSummaryMap(
+      "tcsendbreak",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max))));
+
+  // int tcgetattr(int fildes, struct termios *termios_p);
+  addToFunctionSummaryMap(
+      "tcgetattr",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max)))
+          .ArgConstraint(NotNull(ArgNo(1))));
+
+  // int tcsetattr(int fildes, int optional_actions, const struct termios
+  // *termios_p);
+  addToFunctionSummaryMap(
+      "tcsetattr",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max)))
+          .ArgConstraint(NotNull(ArgNo(2))));
+
+  // int cfsetospeed(struct termios *termios_p, speed_t speed);
+  addToFunctionSummaryMap("cfsetospeed",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int cfsetispeed(struct termios *termios_p, speed_t speed);
+  addToFunctionSummaryMap("cfsetispeed",
+                          Summary(NoEvalCall).ArgConstraint(NotNull(ArgNo(0))));
+
+  // int tcdrain(int fildes);
+  addToFunctionSummaryMap(
+      "tcdrain",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max))));
+
+  // void swab(const void * src, void* dest, ssize_t bytes);
+  addToFunctionSummaryMap("swab", Summary(NoEvalCall)
+                                      .ArgConstraint(BufferSize(0, 2))
+                                      .ArgConstraint(NotNull(ArgNo(1)))
+                                      .ArgConstraint(BufferSize(1, 2))
+                                      .ArgConstraint(ArgumentCondition(
+                                          2, WithinRange, Range(0, Max))));
+
+  // int gethostname(char *name, size_t len);
+  addToFunctionSummaryMap(
+      "gethostname",
+      Summary(NoEvalCall)
+          .ArgConstraint(NotNull(ArgNo(0)))
+          .ArgConstraint(BufferSize(0, 1))
+          .ArgConstraint(ArgumentCondition(1, WithinRange, Range(1, Max))));
+
+  // int posix_memalign(void **memptr, size_t alignment, size_t size);
+  addToFunctionSummaryMap(
+      "posix_memalign",
+      Summary(NoEvalCall)
+          .ArgConstraint(NotNull(ArgNo(0)))
+          .ArgConstraint(ArgumentCondition(2, WithinRange, Range(0, Max))));
+
+  // void *valloc(size_t size);
+  addToFunctionSummaryMap(
+      "valloc",
+      Summary(NoEvalCall)
+          .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, Max))));
+
+  // END POSIX
+
   // Functions for testing.
   if (ChecksEnabled[CK_StdCLibraryFunctionsTesterChecker]) {
     addToFunctionSummaryMap("__buf_size_arg_constraint",
