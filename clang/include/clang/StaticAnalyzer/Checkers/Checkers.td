@@ -293,6 +293,7 @@ let ParentPackage = APIModeling in {
 
 def StdCLibraryFunctionsChecker : Checker<"StdCLibraryFunctions">,
   HelpText<"Improve modeling of the C standard library functions">,
+  Dependencies<[NonNullParamChecker, CallAndMessageChecker]>,
   CheckerOptions<[
     CmdLineOption<Boolean,
                   "DisplayLoadedSummaries",
@@ -306,7 +307,7 @@ def StdCLibraryFunctionArgsChecker : Checker<"StdCLibraryFunctionArgs">,
   HelpText<"Check constraints of arguments of C standard library functions, "
            "such as whether the parameter of isalpha is in the range [0, 255] "
            "or is EOF.">,
-  Dependencies<[StdCLibraryFunctionsChecker, CallAndMessageChecker]>,
+  Dependencies<[StdCLibraryFunctionsChecker]>,
   Documentation<NotDocumented>;
 
 def TrustNonnullChecker : Checker<"TrustNonnull">,
