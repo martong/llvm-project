@@ -141,20 +141,58 @@ class StdLibraryFunctionsChecker
     ArgNo ArgN; // Argument to which we apply the constraint.
   };
 
+  using RangeFun = RangeInt(const FunctionDecl *, ArgNo, BasicValueFactory &);
+  using RangeFunPtr = RangeFun *;
+  class LazyRangeInt {
+    union {
+      RangeInt Int;
+      RangeFunPtr Fun;
+    } Storage;
+    enum { K_Int, K_Fun } Kind;
+
+  public:
+    LazyRangeInt(int Int) : Kind(K_Int) { Storage.Int = Int; }
+    LazyRangeInt(RangeFunPtr Fun) : Kind(K_Fun) { Storage.Fun = Fun; }
+    RangeInt eval(const FunctionDecl *FD, ArgNo ArgN,
+                  BasicValueFactory &BVF) const {
+      if (Kind == K_Int)
+        return Storage.Int;
+      return Storage.Fun(FD, ArgN, BVF);
+    }
+  };
+
+  static RangeInt Max(const FunctionDecl *FD, ArgNo ArgN, BasicValueFactory &BVF) {
+    return BVF.getMaxValue(getArgType(FD, ArgN)).getLimitedValue();
+  }
+
+  using LazyIntRangeVector = std::vector<std::pair<LazyRangeInt, LazyRangeInt>>;
+
   /// Given a range, should the argument stay inside or outside this range?
   enum RangeKind { OutOfRange, WithinRange };
 
   /// Encapsulates a single range on a single symbol within a branch.
   class RangeConstraint : public ValueConstraint {
     RangeKind Kind;      // Kind of range definition.
-    IntRangeVector Args; // Polymorphic arguments.
+    mutable IntRangeVector Ranges;
+    LazyIntRangeVector LazyRanges;
 
   public:
-    RangeConstraint(ArgNo ArgN, RangeKind Kind, const IntRangeVector &Args)
-        : ValueConstraint(ArgN), Kind(Kind), Args(Args) {}
+    RangeConstraint(ArgNo ArgN, RangeKind Kind, const IntRangeVector &Ranges)
+        : ValueConstraint(ArgN), Kind(Kind), Ranges(Ranges) {}
 
-    const IntRangeVector &getRanges() const {
-      return Args;
+    RangeConstraint(ArgNo ArgN, RangeKind Kind,
+                    const LazyIntRangeVector &Ranges)
+        : ValueConstraint(ArgN), Kind(Kind), LazyRanges(Ranges) {}
+
+    const IntRangeVector &getRanges(const FunctionDecl *FD,
+                                    BasicValueFactory &BVF) const {
+      if (Ranges.size())
+        return Ranges;
+      for (const std::pair<LazyRangeInt, LazyRangeInt> &LazyR : LazyRanges) {
+        Ranges.push_back({LazyR.first.eval(FD, ArgN, BVF),
+                          LazyR.second.eval(FD, ArgN, BVF)});
+      }
+      return Ranges;
     }
 
   private:
@@ -498,7 +536,7 @@ ProgramStateRef StdLibraryFunctionsChecker::RangeConstraint::applyAsOutOfRange(
   SVal V = getArgSVal(Call, getArgNo());
 
   if (auto N = V.getAs<NonLoc>()) {
-    const IntRangeVector &R = getRanges();
+    const IntRangeVector &R = getRanges(Summary.FD, BVF);
     size_t E = R.size();
     for (size_t I = 0; I != E; ++I) {
       const llvm::APSInt &Min = BVF.getValue(R[I].first, T);
@@ -534,7 +572,7 @@ ProgramStateRef StdLibraryFunctionsChecker::RangeConstraint::applyAsWithinRange(
   // Then we assume that the value is not in [-inf, A - 1],
   // then not in [D + 1, +inf], then not in [B + 1, C - 1]
   if (auto N = V.getAs<NonLoc>()) {
-    const IntRangeVector &R = getRanges();
+    const IntRangeVector &R = getRanges(Summary.FD, BVF);
     size_t E = R.size();
 
     const llvm::APSInt &MinusInf = BVF.getMinValue(T);
@@ -785,7 +823,6 @@ void StdLibraryFunctionsChecker::initFunctionSummaries(
   const RangeInt IntMin = BVF.getMinValue(IntTy).getLimitedValue();
   const RangeInt LongMax = BVF.getMaxValue(LongTy).getLimitedValue();
   const RangeInt LongLongMax = BVF.getMaxValue(LongLongTy).getLimitedValue();
-  const RangeInt SizeMax = BVF.getMaxValue(SizeTy).getLimitedValue();
 
   // Set UCharRangeMax to min of int or uchar maximum value.
   // The C standard states that the arguments of functions like isalpha must
@@ -883,25 +920,25 @@ void StdLibraryFunctionsChecker::initFunctionSummaries(
 
   // Below are helpers functions to create the summaries.
   auto ArgumentCondition = [](ArgNo ArgN, RangeKind Kind,
-                              IntRangeVector Ranges) {
+                             LazyIntRangeVector Ranges) {
     return std::make_shared<RangeConstraint>(ArgN, Kind, Ranges);
   };
   auto BufferSize = [](auto ...Args) {
     return std::make_shared<BufferSizeConstraint>(Args...);
   };
   struct {
-    auto operator()(RangeKind Kind, IntRangeVector Ranges) {
+    auto operator()(RangeKind Kind, LazyIntRangeVector Ranges) {
       return std::make_shared<RangeConstraint>(Ret, Kind, Ranges);
     }
     auto operator()(BinaryOperator::Opcode Op, ArgNo OtherArgN) {
       return std::make_shared<ComparisonConstraint>(Ret, Op, OtherArgN);
     }
   } ReturnValueCondition;
-  auto Range = [](RangeInt b, RangeInt e) {
-    return IntRangeVector{std::pair<RangeInt, RangeInt>{b, e}};
+  auto Range = [](LazyRangeInt b, LazyRangeInt e) {
+    return LazyIntRangeVector{std::pair<LazyRangeInt, LazyRangeInt>{b, e}};
   };
-  auto SingleValue = [](RangeInt v) {
-    return IntRangeVector{std::pair<RangeInt, RangeInt>{v, v}};
+  auto SingleValue = [](LazyRangeInt v) {
+    return LazyIntRangeVector{std::pair<LazyRangeInt, LazyRangeInt>{v, v}};
   };
   auto LessThanOrEq = BO_LE;
   auto NotNull = [&](ArgNo ArgN) {
@@ -909,40 +946,6 @@ void StdLibraryFunctionsChecker::initFunctionSummaries(
   };
 
   using RetType = QualType;
-  // Templates for summaries that are reused by many functions.
-  auto Getc = [&]() {
-    return Summary(ArgTypes{Irrelevant}, RetType{IntTy}, NoEvalCall)
-        .Case({ReturnValueCondition(WithinRange,
-                                    {{EOFv, EOFv}, {0, UCharRangeMax}})});
-  };
-  auto Read = [&](RetType R, RangeInt Max) {
-    return Summary(ArgTypes{Irrelevant, Irrelevant, SizeTy}, RetType{R},
-                   NoEvalCall)
-        .Case({ReturnValueCondition(LessThanOrEq, ArgNo(2)),
-               ReturnValueCondition(WithinRange, Range(-1, Max))});
-  };
-  auto Fread = [&]() {
-    return Summary(ArgTypes{VoidPtrRestrictTy, Irrelevant, SizeTy, Irrelevant},
-                   RetType{SizeTy}, NoEvalCall)
-        .Case({
-            ReturnValueCondition(LessThanOrEq, ArgNo(2)),
-        })
-        .ArgConstraint(NotNull(ArgNo(0)));
-  };
-  auto Fwrite = [&]() {
-    return Summary(
-               ArgTypes{ConstVoidPtrRestrictTy, Irrelevant, SizeTy, Irrelevant},
-               RetType{SizeTy}, NoEvalCall)
-        .Case({
-            ReturnValueCondition(LessThanOrEq, ArgNo(2)),
-        })
-        .ArgConstraint(NotNull(ArgNo(0)));
-  };
-  auto Getline = [&](RetType R, RangeInt Max) {
-    return Summary(ArgTypes{Irrelevant, Irrelevant, Irrelevant}, RetType{R},
-                   NoEvalCall)
-        .Case({ReturnValueCondition(WithinRange, {{-1, -1}, {1, Max}})});
-  };
 
   // The isascii() family of functions.
   // The behavior is undefined if the value of the argument is not
@@ -1079,29 +1082,35 @@ void StdLibraryFunctionsChecker::initFunctionSummaries(
                  ReturnValueCondition(WithinRange, SingleValue(0))}));
 
   // The getc() family of functions that returns either a char or an EOF.
-  addToFunctionSummaryMap("getc", Getc());
-  addToFunctionSummaryMap("fgetc", Getc());
+  auto Getc = Summary(ArgTypes{Irrelevant}, RetType{IntTy}, NoEvalCall)
+        .Case({ReturnValueCondition(WithinRange,
+                                    {{EOFv, EOFv}, {0, UCharRangeMax}})});
+  addToFunctionSummaryMap("getc", Getc);
+  addToFunctionSummaryMap("fgetc", Getc);
   addToFunctionSummaryMap(
       "getchar", Summary(ArgTypes{}, RetType{IntTy}, NoEvalCall)
                      .Case({ReturnValueCondition(
                          WithinRange, {{EOFv, EOFv}, {0, UCharRangeMax}})}));
 
   // read()-like functions that never return more than buffer size.
-  // We are not sure how ssize_t is defined on every platform, so we
-  // provide three variants that should cover common cases.
-  addToFunctionSummaryMap("read", {Read(IntTy, IntMax), Read(LongTy, LongMax),
-                                   Read(LongLongTy, LongLongMax)});
-  addToFunctionSummaryMap("write", {Read(IntTy, IntMax), Read(LongTy, LongMax),
-                                    Read(LongLongTy, LongLongMax)});
-  addToFunctionSummaryMap("fread", Fread());
-  addToFunctionSummaryMap("fwrite", Fwrite());
+  auto Read = Summary(NoEvalCall)
+                  .Case({ReturnValueCondition(LessThanOrEq, ArgNo(2)),
+                         ReturnValueCondition(WithinRange, Range(-1, Max))});
+  addToFunctionSummaryMap("read", Read);
+  addToFunctionSummaryMap("write", Read);
+  auto Fread = Summary(NoEvalCall)
+                   .Case({
+                       ReturnValueCondition(LessThanOrEq, ArgNo(2)),
+                   })
+                   .ArgConstraint(NotNull(ArgNo(0)));
+  addToFunctionSummaryMap("fread", Fread);
+  addToFunctionSummaryMap("fwrite", Fread);
+
   // getline()-like functions either fail or read at least the delimiter.
-  addToFunctionSummaryMap("getline",
-                          {Getline(IntTy, IntMax), Getline(LongTy, LongMax),
-                           Getline(LongLongTy, LongLongMax)});
-  addToFunctionSummaryMap("getdelim",
-                          {Getline(IntTy, IntMax), Getline(LongTy, LongMax),
-                           Getline(LongLongTy, LongLongMax)});
+  auto Getline = Summary(NoEvalCall)
+        .Case({ReturnValueCondition(WithinRange, {{-1, -1}, {1, Max}})});
+  addToFunctionSummaryMap("getline", Getline);
+  addToFunctionSummaryMap("getdelim", Getline);
 
   // int fprintf(FILE *stream, const char *format, ...);
   addToFunctionSummaryMap(
@@ -1305,6 +1314,12 @@ void StdLibraryFunctionsChecker::initFunctionSummaries(
                                     RetType{IntTy}, EvalCallAsPure)
                                 .ArgConstraint(NotNull(ArgNo(0)))
                                 .ArgConstraint(NotNull(ArgNo(1))));
+    addToFunctionSummaryMap(
+        "__lazy_range",
+        Summary(ArgTypes{IntTy, IntTy}, RetType{IntTy}, EvalCallAsPure)
+            .ArgConstraint(ArgumentCondition(0, WithinRange, Range(0, 100)))
+            .ArgConstraint(
+                ArgumentCondition(1, WithinRange, Range(0, Max))));
   }
 }
 

@@ -175,3 +175,19 @@ void test_buf_size_symbolic_and_offset_with_multiplication(size_t s) {
   // bugpath-warning{{TRUE}} \
   // bugpath-note{{TRUE}}
 }
+
+int __lazy_range(int, int);
+void test_lazy_range(int a, int b) {
+  __lazy_range(a, b);
+  clang_analyzer_eval(a >= 0 && a <= 100 && b >= 0 && b <= __INT_MAX__); // \
+  // report-warning{{TRUE}} \
+  // bugpath-warning{{TRUE}} \
+  // bugpath-note{{TRUE}} \
+  // bugpath-note{{'a' is >= 0}} \
+  // bugpath-note{{'a' is <= 100}} \
+  // bugpath-note{{'b' is >= 0}} \
+  // bugpath-note{{'b' is <= __INT_MAX__}} \
+  // bugpath-note{{Left side of '&&' is true}} \
+  // bugpath-note{{Left side of '&&' is true}} \
+  // bugpath-note{{Left side of '&&' is true}}
+}
