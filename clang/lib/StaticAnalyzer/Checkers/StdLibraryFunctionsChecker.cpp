@@ -137,6 +137,8 @@ class StdLibraryFunctionsChecker
     virtual bool skip() const { return false; }
     ArgNo getArgNo() const { return ArgN; }
 
+    virtual StringRef getName() const = 0;
+
   protected:
     ArgNo ArgN; // Argument to which we apply the constraint.
   };
@@ -203,6 +205,7 @@ class StdLibraryFunctionsChecker
                                        const CallEvent &Call,
                                        const Summary &Summary) const;
   public:
+    StringRef getName() const override { return "Range"; }
     ProgramStateRef apply(ProgramStateRef State, const CallEvent &Call,
                           const Summary &Summary,
                           CheckerContext &C) const override {
@@ -240,6 +243,7 @@ class StdLibraryFunctionsChecker
     ArgNo OtherArgN;
 
   public:
+    virtual StringRef getName() const override { return "Comparison"; };
     ComparisonConstraint(ArgNo ArgN, BinaryOperator::Opcode Opcode,
                          ArgNo OtherArgN)
         : ValueConstraint(ArgN), Opcode(Opcode), OtherArgN(OtherArgN) {}
@@ -256,6 +260,7 @@ class StdLibraryFunctionsChecker
     bool CannotBeNull = true;
 
   public:
+    StringRef getName() const override { return "NonNull"; }
     ProgramStateRef apply(ProgramStateRef State, const CallEvent &Call,
                           const Summary &Summary,
                           CheckerContext &C) const override {
@@ -302,6 +307,7 @@ class StdLibraryFunctionsChecker
     BinaryOperator::Opcode Op = BO_LE;
 
   public:
+    StringRef getName() const override { return "BufferSize"; }
     BufferSizeConstraint(ArgNo BufArgN, ArgNo SizeArgN)
         : ValueConstraint(BufArgN), SizeArgN(SizeArgN) {}
 
@@ -503,18 +509,24 @@ private:
 
   void initFunctionSummaries(CheckerContext &C) const;
 
-  void reportBug(const CallEvent &Call, ExplodedNode *N,
+  void reportBug(const CallEvent &Call, ExplodedNode *N, const ValueConstraint* VC,
                  CheckerContext &C) const {
     if (!ChecksEnabled[CK_StdCLibraryFunctionArgsChecker])
       return;
-    // TODO Add detailed diagnostic.
-    StringRef Msg = "Function argument constraint is not satisfied";
+    // TODO Add more detailed diagnostic.
+    std::string Msg =
+        std::string("Function argument constraint is not satisfied, ") +
+        VC->getName().data() + ", ArgN: " + std::to_string(VC->getArgNo());
     if (!BT_InvalidArg)
       BT_InvalidArg = std::make_unique<BugType>(
           CheckNames[CK_StdCLibraryFunctionArgsChecker],
           "Unsatisfied argument constraints", categories::LogicError);
     auto R = std::make_unique<PathSensitiveBugReport>(*BT_InvalidArg, Msg, N);
-    bugreporter::trackExpressionValue(N, Call.getArgExpr(0), *R);
+    bugreporter::trackExpressionValue(N, Call.getArgExpr(VC->getArgNo()), *R);
+
+    // Highlight the range of the argument that was violated.
+    R->addRange(Call.getArgSourceRange(VC->getArgNo()));
+
     C.emitReport(std::move(R));
   }
 };
@@ -643,13 +655,15 @@ void StdLibraryFunctionsChecker::checkPreCall(const CallEvent &Call,
 
   ProgramStateRef NewState = State;
   for (const ValueConstraintPtr& VC : Summary.ArgConstraints) {
+    assert(VC->getArgNo() != Ret &&
+           "Arg constraint should not refer to the return value");
     ProgramStateRef SuccessSt = VC->apply(NewState, Call, Summary, C);
     ProgramStateRef FailureSt = VC->negate()->apply(NewState, Call, Summary, C);
     // The argument constraint is not satisfied.
     if (FailureSt && !SuccessSt) {
       ++NumArgConstraintViolated;
       if (ExplodedNode *N = C.generateErrorNode(NewState))
-        reportBug(Call, N, C);
+        reportBug(Call, N, VC.get(), C);
       break;
     } else {
       // We will apply the constraint even if we cannot reason about the
