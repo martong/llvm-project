@@ -86,10 +86,10 @@ void InvalidatedIteratorChecker::reportBug(const StringRef &Message,
   C.emitReport(std::move(R));
 }
 
-void ento::registerInvalidatedIteratorChecker(CheckerManager &mgr) {
-  mgr.registerChecker<InvalidatedIteratorChecker>();
-}
-
-bool ento::shouldRegisterInvalidatedIteratorChecker(const LangOptions &LO) {
-  return true;
-}
+// void ento::registerInvalidatedIteratorChecker(CheckerManager &mgr) {
+//   mgr.registerChecker<InvalidatedIteratorChecker>();
+// }
+// 
+// bool ento::shouldRegisterInvalidatedIteratorChecker(const LangOptions &LO) {
+//   return true;
+// }

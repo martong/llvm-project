@@ -1630,10 +1630,10 @@ SymbolRef rebaseSymbol(ProgramStateRef State, SValBuilder &SVB,
 
 } // namespace
 
-void ento::registerIteratorModeling(CheckerManager &mgr) {
-  mgr.registerChecker<IteratorModeling>();
-}
-
-bool ento::shouldRegisterIteratorModeling(const LangOptions &LO) {
-  return true;
-}
+// void ento::registerIteratorModeling(CheckerManager &mgr) {
+//   mgr.registerChecker<IteratorModeling>();
+// }
+// 
+// bool ento::shouldRegisterIteratorModeling(const LangOptions &LO) {
+//   return true;
+// }
