@@ -187,10 +187,10 @@ ExplodedNode *DebugIteratorModeling::reportDebugMsg(llvm::StringRef Msg,
   return N;
 }
 
-void ento::registerDebugIteratorModeling(CheckerManager &mgr) {
-  mgr.registerChecker<DebugIteratorModeling>();
-}
-
-bool ento::shouldRegisterDebugIteratorModeling(const LangOptions &LO) {
-  return true;
-}
+// void ento::registerDebugIteratorModeling(CheckerManager &mgr) {
+//   mgr.registerChecker<DebugIteratorModeling>();
+// }
+// 
+// bool ento::shouldRegisterDebugIteratorModeling(const LangOptions &LO) {
+//   return true;
+// }

@@ -594,26 +594,26 @@ def EnumCastOutOfRangeChecker : Checker<"EnumCastOutOfRange">,
   HelpText<"Check integer to enumeration casts for out of range values">,
   Documentation<HasAlphaDocumentation>;
 
-def IteratorModeling : Checker<"IteratorModeling">,
-  HelpText<"Models iterators of C++ containers">,
-  Documentation<NotDocumented>,
-  Hidden;
-
-def InvalidatedIteratorChecker : Checker<"InvalidatedIterator">,
-  HelpText<"Check for use of invalidated iterators">,
-  Dependencies<[IteratorModeling]>,
-  Documentation<HasAlphaDocumentation>;
-
-def IteratorRangeChecker : Checker<"IteratorRange">,
-  HelpText<"Check for iterators used outside their valid ranges">,
-  Dependencies<[IteratorModeling]>,
-  Documentation<HasAlphaDocumentation>;
-
-def MismatchedIteratorChecker : Checker<"MismatchedIterator">,
-  HelpText<"Check for use of iterators of different containers where iterators "
-           "of the same container are expected">,
-  Dependencies<[IteratorModeling]>,
-  Documentation<HasAlphaDocumentation>;
+// def IteratorModeling : Checker<"IteratorModeling">,
+//   HelpText<"Models iterators of C++ containers">,
+//   Documentation<NotDocumented>,
+//   Hidden;
+// 
+// def InvalidatedIteratorChecker : Checker<"InvalidatedIterator">,
+//   HelpText<"Check for use of invalidated iterators">,
+//   Dependencies<[IteratorModeling]>,
+//   Documentation<HasAlphaDocumentation>;
+// 
+// def IteratorRangeChecker : Checker<"IteratorRange">,
+//   HelpText<"Check for iterators used outside their valid ranges">,
+//   Dependencies<[IteratorModeling]>,
+//   Documentation<HasAlphaDocumentation>;
+// 
+// def MismatchedIteratorChecker : Checker<"MismatchedIterator">,
+//   HelpText<"Check for use of iterators of different containers where iterators "
+//            "of the same container are expected">,
+//   Dependencies<[IteratorModeling]>,
+//   Documentation<HasAlphaDocumentation>;
 
 def PlacementNewChecker : Checker<"PlacementNew">,
   HelpText<"Check if default placement new is provided with pointers to "
@@ -1362,10 +1362,10 @@ def ReportStmts : Checker<"ReportStmts">,
   HelpText<"Emits a warning for every statement.">,
   Documentation<NotDocumented>;
 
-def DebugIteratorModeling : Checker<"DebugIteratorModeling">,
-  HelpText<"Check the analyzer's understanding of C++ iterators">,
-  Dependencies<[IteratorModeling]>,
-  Documentation<NotDocumented>;
+// def DebugIteratorModeling : Checker<"DebugIteratorModeling">,
+//   HelpText<"Check the analyzer's understanding of C++ iterators">,
+//   Dependencies<[IteratorModeling]>,
+//   Documentation<NotDocumented>;
 
 } // end "debug"
 

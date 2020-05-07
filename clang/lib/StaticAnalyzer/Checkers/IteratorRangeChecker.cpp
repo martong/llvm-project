@@ -264,10 +264,10 @@ bool isEqual(ProgramStateRef State, SymbolRef Sym1, SymbolRef Sym2) {
 
 } // namespace
 
-void ento::registerIteratorRangeChecker(CheckerManager &mgr) {
-  mgr.registerChecker<IteratorRangeChecker>();
-}
-
-bool ento::shouldRegisterIteratorRangeChecker(const LangOptions &LO) {
-  return true;
-}
+// void ento::registerIteratorRangeChecker(CheckerManager &mgr) {
+//   mgr.registerChecker<IteratorRangeChecker>();
+// }
+// 
+// bool ento::shouldRegisterIteratorRangeChecker(const LangOptions &LO) {
+//   return true;
+// }

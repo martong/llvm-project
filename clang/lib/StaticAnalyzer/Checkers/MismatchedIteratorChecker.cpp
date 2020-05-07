@@ -286,10 +286,10 @@ void MismatchedIteratorChecker::reportBug(const StringRef &Message,
   C.emitReport(std::move(R));
 }
 
-void ento::registerMismatchedIteratorChecker(CheckerManager &mgr) {
-  mgr.registerChecker<MismatchedIteratorChecker>();
-}
-
-bool ento::shouldRegisterMismatchedIteratorChecker(const LangOptions &LO) {
-  return true;
-}
+// void ento::registerMismatchedIteratorChecker(CheckerManager &mgr) {
+//   mgr.registerChecker<MismatchedIteratorChecker>();
+// }
+// 
+// bool ento::shouldRegisterMismatchedIteratorChecker(const LangOptions &LO) {
+//   return true;
+// }
