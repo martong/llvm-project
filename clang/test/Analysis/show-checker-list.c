@@ -30,8 +30,8 @@
 
 // Note that alpha.cplusplus.IteratorModeling is not only an alpha, but also a
 // hidden checker. In this case, we'd only like to see it in the developer list.
-// CHECK-ALPHA-NOT: alpha.cplusplus.IteratorModeling
-// CHECK-DEVELOPER: alpha.cplusplus.IteratorModeling
+// alpha.cplusplus.IteratorModeling
+// alpha.cplusplus.IteratorModeling
 
 // CHECK-STABLE:        core.DivideZero
 // CHECK-DEVELOPER-NOT: core.DivideZero
