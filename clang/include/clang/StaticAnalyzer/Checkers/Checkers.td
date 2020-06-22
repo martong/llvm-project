@@ -354,6 +354,12 @@ def StdCLibraryFunctionsChecker : Checker<"StdCLibraryFunctions">,
                   "If set to true, the checker displays the found summaries "
                   "for the given translation unit.",
                   "false",
+                  Released>,
+    CmdLineOption<Boolean,
+                  "ModelPOSIX",
+                  "If set to true, the checker models functions from the "
+                  "POSIX standard.",
+                  "false",
                   Released>
   ]>,
   Documentation<NotDocumented>;
