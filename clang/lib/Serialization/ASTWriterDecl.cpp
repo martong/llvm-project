@@ -2453,9 +2453,6 @@ void ASTWriter::WriteDecl(ASTContext &Context, Decl *D) {
 }
 
 void ASTRecordWriter::AddFunctionDefinition(const FunctionDecl *FD) {
-  // Switch case IDs are per function body.
-  Writer->ClearSwitchCaseIDs();
-
   assert(FD->doesThisDeclarationHaveABody());
   bool ModulesCodegen = false;
   if (Writer->WritingModule && !FD->isDependentContext()) {

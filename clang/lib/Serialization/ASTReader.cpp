@@ -7461,8 +7461,6 @@ serialization::DeclID ASTReader::ReadDeclID(ModuleFile &F,
 /// source each time it is called, and is meant to be used via a
 /// LazyOffsetPtr (which is used by Decls for the body of functions, etc).
 Stmt *ASTReader::GetExternalDeclStmt(uint64_t Offset) {
-  // Switch case IDs are per Decl.
-  ClearSwitchCaseIDs();
 
   // Offset here is a global offset across the entire chain.
   RecordLocation Loc = getLocalBitOffset(Offset);
@@ -9067,8 +9065,7 @@ IdentifierTable &ASTReader::getIdentifierTable() {
 /// Record that the given ID maps to the given switch-case
 /// statement.
 void ASTReader::RecordSwitchCaseID(SwitchCase *SC, unsigned ID) {
-  assert((*CurrSwitchCaseStmts)[ID] == nullptr &&
-         "Already have a SwitchCase with this ID");
+  // We may already have a SwitchCase with this ID, drop the existing.
   (*CurrSwitchCaseStmts)[ID] = SC;
 }
 

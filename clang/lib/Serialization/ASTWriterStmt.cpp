@@ -2611,11 +2611,12 @@ void ASTStmtWriter::VisitOMPTargetTeamsDistributeSimdDirective(
 //===----------------------------------------------------------------------===//
 
 unsigned ASTWriter::RecordSwitchCaseID(SwitchCase *S) {
-  assert(SwitchCaseIDs.find(S) == SwitchCaseIDs.end() &&
-         "SwitchCase recorded twice");
   unsigned NextID = SwitchCaseIDs.size();
-  SwitchCaseIDs[S] = NextID;
-  return NextID;
+  assert(NextID < UINT_MAX && "Too many SwitchCase to serialize");
+  // If we already recorded this SwitchCase then just return with its ID, else
+  // insert it with the next ID.
+  auto Res = SwitchCaseIDs.insert({S, NextID});
+  return Res.first->second;
 }
 
 unsigned ASTWriter::getSwitchCaseID(SwitchCase *S) {

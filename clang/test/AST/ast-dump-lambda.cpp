@@ -34,6 +34,21 @@ template <typename... Ts> void test(Ts... a) {
   []() noexcept {};
   []() -> int { return 0; };
 }
+
+class {
+public:
+  enum {} a;
+} b;
+void should_not_crash_with_switch_in_lambda() {
+  switch (b.a)
+  default:;
+    enum { e } d;
+  auto f = [d] {
+    switch (d)
+    case e:;
+  };
+}
+
 // CHECK:Dumping test:
 // CHECK-NEXT:FunctionTemplateDecl {{.*}} <{{.*}}ast-dump-lambda.cpp:15:1, line:36:1> line:15:32{{( imported)?}} test
 // CHECK-NEXT:|-TemplateTypeParmDecl {{.*}} <col:11, col:23> col:23{{( imported)?}} referenced typename depth 0 index 0 ... Ts
