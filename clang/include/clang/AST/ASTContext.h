@@ -668,6 +668,12 @@ public:
 
   DynTypedNodeList getParents(const ast_type_traits::DynTypedNode &Node);
 
+  /// Invalidate parent maps.
+  /// The parent maps work like a cache.
+  /// It should be invalidated after the AST has been modified.
+  /// The data is recomputed when a next getParents() call is done.
+  void invalidateParentMaps();
+
   const clang::PrintingPolicy &getPrintingPolicy() const {
     return PrintingPolicy;
   }

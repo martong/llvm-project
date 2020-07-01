@@ -44,6 +44,10 @@ public:
     assert(FD && FD->getName() == "f");
     bool OrigFDHasBody = FD->hasBody();
 
+    const ASTContext::DynTypedNodeList ParentsBeforeImport =
+        Ctx.getParents<Decl>(*FD);
+    ASSERT_FALSE(ParentsBeforeImport.empty());
+
     // Prepare the index file and the AST file.
     int ASTFD;
     llvm::SmallString<256> ASTFileName;
@@ -105,8 +109,27 @@ public:
             EXPECT_EQ(OrigSLoc, FDWithDefinition->getLocation());
           }
         }
+
+        // Check parent map.
+        const ASTContext::DynTypedNodeList ParentsAfterImport =
+            Ctx.getParents<Decl>(*FD);
+        const ASTContext::DynTypedNodeList ParentsOfImported =
+            Ctx.getParents<Decl>(*NewFD);
+        EXPECT_TRUE(
+            checkParentListsEq(ParentsBeforeImport, ParentsAfterImport));
+        EXPECT_FALSE(ParentsOfImported.empty());
       }
     }
+  }
+
+  static bool checkParentListsEq(const ASTContext::DynTypedNodeList &L1,
+                                 const ASTContext::DynTypedNodeList &L2) {
+    if (L1.size() != L2.size())
+      return false;
+    for (unsigned int I = 0; I < L1.size(); ++I)
+      if (L1[I] != L2[I])
+        return false;
+    return true;
   }
 
 private:

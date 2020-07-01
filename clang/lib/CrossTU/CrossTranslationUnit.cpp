@@ -718,6 +718,9 @@ CrossTranslationUnitContext::importDefinitionImpl(const T *D, ASTUnit *Unit) {
   assert(hasBodyOrInit(ToDecl) && "Imported Decl should have body or init.");
   ++NumGetCTUSuccess;
 
+  // Parent map is invalidated after changing the AST.
+  ToDecl->getASTContext().invalidateParentMaps();
+
   return ToDecl;
 }
 

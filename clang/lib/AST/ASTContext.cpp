@@ -10670,6 +10670,8 @@ ASTContext::getParents(const ast_type_traits::DynTypedNode &Node) {
   return P->getParents(Node);
 }
 
+void ASTContext::invalidateParentMaps() { Parents.clear(); }
+
 bool
 ASTContext::ObjCMethodsAreEqual(const ObjCMethodDecl *MethodDecl,
                                 const ObjCMethodDecl *MethodImpl) {
