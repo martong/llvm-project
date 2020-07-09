@@ -42,7 +42,8 @@
 // CHECK-NEXT: cplusplus.Move:WarnOn = KnownsAndLocals
 // CHECK-NEXT: crosscheck-with-z3 = false
 // CHECK-NEXT: ctu-dir = ""
-// CHECK-NEXT: ctu-import-threshold = 8
+// CHECK-NEXT: ctu-import-cpp-threshold = 8
+// CHECK-NEXT: ctu-import-threshold = 24
 // CHECK-NEXT: ctu-index-name = externalDefMap.txt
 // CHECK-NEXT: ctu-invocation-list = invocations.yaml
 // CHECK-NEXT: deadcode.DeadStores:ShowFixIts = false
