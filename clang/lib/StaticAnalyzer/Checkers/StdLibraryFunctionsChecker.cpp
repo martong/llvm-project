@@ -1986,6 +1986,156 @@ void StdLibraryFunctionsChecker::initFunctionSummaries(
                   BufferSize(/*Buffer=*/ArgNo(4), /*BufSize=*/ArgNo(5)))
               .ArgConstraint(
                   ArgumentCondition(5, WithinRange, Range(0, *Socklen_tMax))));
+
+    Optional<QualType> StructUtimbufTy = lookupType("utimbuf", ACtx);
+    Optional<QualType> StructUtimbufPtrTy;
+    if (StructUtimbufTy)
+      StructUtimbufPtrTy = ACtx.getPointerType(*StructUtimbufTy);
+
+    if (StructUtimbufPtrTy)
+      // int utime(const char *filename, struct utimbuf *buf);
+      addToFunctionSummaryMap(
+          "utime", Summary(ArgTypes{ConstCharPtrTy, *StructUtimbufPtrTy},
+                           RetType{IntTy}, NoEvalCall)
+                       .ArgConstraint(NotNull(ArgNo(0))));
+
+    Optional<QualType> StructTimespecTy = lookupType("timespec", ACtx);
+    Optional<QualType> StructTimespecPtrTy, ConstStructTimespecPtrTy;
+    if (StructTimespecTy) {
+      StructTimespecPtrTy = ACtx.getPointerType(*StructTimespecTy);
+      ConstStructTimespecPtrTy =
+          ACtx.getPointerType(StructTimespecTy->withConst());
+    }
+
+    if (ConstStructTimespecPtrTy) {
+      // int futimens(int fd, const struct timespec times[2]);
+      addToFunctionSummaryMap(
+          "futimens", Summary(ArgTypes{IntTy, *ConstStructTimespecPtrTy},
+                              RetType{IntTy}, NoEvalCall)
+                          .ArgConstraint(ArgumentCondition(0, WithinRange,
+                                                           Range(0, IntMax))));
+
+      // int utimensat(int dirfd, const char *pathname,
+      //               const struct timespec times[2], int flags);
+      addToFunctionSummaryMap(
+          "utimensat", Summary(ArgTypes{IntTy, ConstCharPtrTy,
+                                        *ConstStructTimespecPtrTy, IntTy},
+                               RetType{IntTy}, NoEvalCall)
+                           .ArgConstraint(NotNull(ArgNo(1))));
+    }
+
+    Optional<QualType> StructTimevalTy = lookupType("timeval", ACtx);
+    Optional<QualType> ConstStructTimevalPtrTy;
+    if (StructTimevalTy)
+      ConstStructTimevalPtrTy =
+          ACtx.getPointerType(StructTimevalTy->withConst());
+
+    if (ConstStructTimevalPtrTy)
+      // int utimes(const char *filename, const struct timeval times[2]);
+      addToFunctionSummaryMap(
+          "utimes", Summary(ArgTypes{ConstCharPtrTy, *ConstStructTimevalPtrTy},
+                            RetType{IntTy}, NoEvalCall)
+                        .ArgConstraint(NotNull(ArgNo(0))));
+
+    if (ConstStructTimevalPtrTy && StructTimespecPtrTy)
+      // int nanosleep(const struct timespec *rqtp, struct timespec *rmtp);
+      addToFunctionSummaryMap(
+          "nanosleep",
+          Summary(ArgTypes{*ConstStructTimespecPtrTy, *StructTimespecPtrTy},
+                  RetType{IntTy}, NoEvalCall)
+              .ArgConstraint(NotNull(ArgNo(0))));
+
+    Optional<QualType> Time_tTy = lookupType("time_t", ACtx);
+    Optional<QualType> Time_tPtrTy, Time_tPtrRestrictTy, ConstTime_tPtrTy,
+        ConstTime_tPtrRestrictTy;
+    if (Time_tTy) {
+      Time_tPtrTy = ACtx.getPointerType(*Time_tTy);
+      Time_tPtrRestrictTy = getRestrictTy(*Time_tPtrTy);
+      ConstTime_tPtrTy = ACtx.getPointerType(Time_tTy->withConst());
+      ConstTime_tPtrRestrictTy = getRestrictTy(*ConstTime_tPtrTy);
+    }
+
+    Optional<QualType> StructTmTy = lookupType("tm", ACtx);
+    Optional<QualType> StructTmPtrTy, StructTmPtrRestrictTy, ConstStructTmPtrTy,
+        ConstStructTmPtrRestrictTy;
+    if (StructTmTy) {
+      StructTmPtrTy = ACtx.getPointerType(*StructTmTy);
+      StructTmPtrRestrictTy = getRestrictTy(*StructTmPtrTy);
+      ConstStructTmPtrTy = ACtx.getPointerType(StructTmTy->withConst());
+      ConstStructTmPtrRestrictTy = getRestrictTy(*ConstStructTmPtrTy);
+    }
+
+    if (ConstTime_tPtrTy && StructTmPtrTy)
+      // struct tm * localtime(const time_t *tp);
+      addToFunctionSummaryMap("localtime",
+                              Summary(ArgTypes{*ConstTime_tPtrTy},
+                                      RetType{*StructTmPtrTy}, NoEvalCall)
+                                  .ArgConstraint(NotNull(ArgNo(0))));
+
+    if (ConstTime_tPtrRestrictTy && StructTmPtrRestrictTy && StructTmPtrTy)
+      // struct tm *localtime_r(const time_t *restrict timer,
+      //                        struct tm *restrict result);
+      addToFunctionSummaryMap(
+          "localtime_r",
+          Summary(ArgTypes{*ConstTime_tPtrRestrictTy, *StructTmPtrRestrictTy},
+                  RetType{*StructTmPtrTy}, NoEvalCall)
+              .ArgConstraint(NotNull(ArgNo(0)))
+              .ArgConstraint(NotNull(ArgNo(1))));
+
+    if (ConstStructTmPtrRestrictTy)
+      // char *asctime_r(const struct tm *restrict tm, char *restrict buf);
+      addToFunctionSummaryMap(
+          "asctime_r",
+          Summary(ArgTypes{*ConstStructTmPtrRestrictTy, CharPtrRestrictTy},
+                  RetType{CharPtrTy}, NoEvalCall)
+              .ArgConstraint(NotNull(ArgNo(0)))
+              .ArgConstraint(NotNull(ArgNo(1))));
+
+    if (ConstTime_tPtrTy)
+      // char *ctime_r(const time_t *timep, char *buf);
+      addToFunctionSummaryMap("ctime_r",
+                              Summary(ArgTypes{*ConstTime_tPtrTy, CharPtrTy},
+                                      RetType{CharPtrTy}, NoEvalCall)
+                                  .ArgConstraint(NotNull(ArgNo(0)))
+                                  .ArgConstraint(NotNull(ArgNo(1))));
+
+    if (ConstTime_tPtrRestrictTy && StructTmPtrRestrictTy && StructTmPtrTy)
+      // struct tm *gmtime_r(const time_t *restrict timer,
+      //        struct tm *restrict result);
+      addToFunctionSummaryMap(
+          "gmtime_r",
+          Summary(ArgTypes{*ConstTime_tPtrRestrictTy, *StructTmPtrRestrictTy},
+                  RetType{*StructTmPtrTy}, NoEvalCall)
+              .ArgConstraint(NotNull(ArgNo(0)))
+              .ArgConstraint(NotNull(ArgNo(1))));
+
+    if (ConstTime_tPtrTy && StructTmPtrTy)
+      // struct tm * gmtime(const time_t *tp);
+      addToFunctionSummaryMap("gmtime",
+                              Summary(ArgTypes{*ConstTime_tPtrTy},
+                                      RetType{*StructTmPtrTy}, NoEvalCall)
+                                  .ArgConstraint(NotNull(ArgNo(0))));
+
+    Optional<QualType> Clockid_tTy = lookupType("clockid_t", ACtx);
+
+    if (Clockid_tTy && StructTimespecPtrTy)
+      // int clock_gettime(clockid_t clock_id, struct timespec *tp);
+      addToFunctionSummaryMap(
+          "clock_gettime", Summary(ArgTypes{*Clockid_tTy, *StructTimespecPtrTy},
+                                   RetType{IntTy}, NoEvalCall)
+                               .ArgConstraint(NotNull(ArgNo(1))));
+
+    Optional<QualType> StructItimervalTy = lookupType("itimerval", ACtx);
+    Optional<QualType> StructItimervalPtrTy;
+    if (StructItimervalTy)
+      StructItimervalPtrTy = ACtx.getPointerType(*StructItimervalTy);
+
+    if (StructItimervalPtrTy)
+      // int getitimer(int which, struct itimerval *curr_value);
+      addToFunctionSummaryMap("getitimer",
+                              Summary(ArgTypes{IntTy, *StructItimervalPtrTy},
+                                      RetType{IntTy}, NoEvalCall)
+                                  .ArgConstraint(NotNull(ArgNo(1))));
   }
 
   // Functions for testing.
