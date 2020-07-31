@@ -1055,7 +1055,7 @@ void ExprEngine::defaultEvalCall(NodeBuilder &Bldr, ExplodedNode *Pred,
       if (FD->getDefinition()) {
 
         auto *M = this->getIRContext()->getFunction(FD->getDefinition());
-        // M->dump();
+        M->dump();
         // assert(M->getFunctionList().size() >= 1);
       }
 

@@ -24,6 +24,7 @@ namespace clang {
 class Preprocessor;
 class DiagnosticsEngine;
 class CodeInjector;
+class CodeGenerator;
 class CompilerInstance;
 
 namespace ento {
@@ -32,6 +33,8 @@ class CheckerManager;
 class CheckerRegistry;
 
 class AnalysisASTConsumer : public ASTConsumer {
+protected:
+  CodeGenerator *CG = nullptr;
 public:
   virtual void AddDiagnosticConsumer(PathDiagnosticConsumer *Consumer) = 0;
 
@@ -47,6 +50,8 @@ public:
   ///   });
   virtual void
   AddCheckerRegistrationFn(std::function<void(CheckerRegistry &)> Fn) = 0;
+
+  void setCodeGen(CodeGenerator* Cg) { this->CG = Cg; }
 };
 
 /// CreateAnalysisConsumer - Creates an ASTConsumer to run various code

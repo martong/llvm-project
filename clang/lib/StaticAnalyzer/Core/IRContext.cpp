@@ -18,30 +18,9 @@ using namespace llvm;
 using namespace clang;
 using namespace ento;
 
-IRContext::IRContext(CompilerInstance &CI) {
-  std::string ModuleName("csa_module");
-  LLVMCtx = std::make_unique<LLVMContext>();
-  CodeGen.reset(CreateLLVMCodeGen(
-      CI.getDiagnostics(), ModuleName, CI.getHeaderSearchOpts(),
-      CI.getPreprocessorOpts(), CI.getCodeGenOpts(), *LLVMCtx));
-}
-
-IRContext::~IRContext() { CodeGen->ReleaseModule(); }
-
-void IRContext::handleTranslationUnit(ASTContext &C) {
-  //C.getTranslationUnitDecl()->dump();
-  CodeGen->Initialize(C);
-  for (Decl *D : C.getTranslationUnitDecl()->decls()) {
-    CodeGen->HandleTopLevelDecl(DeclGroupRef(D));
-  }
-  CodeGen->HandleTranslationUnit(C);
-  assert(CodeGen->GetModule());
-}
-
-llvm::Module *IRContext::getModule() { return CodeGen->GetModule(); }
-
 llvm::Module *IRContext::getFunction(const FunctionDecl *FD) {
+    assert(*CodeGen);
     //CodeGen->HandleTopLevelDecl(DeclGroupRef(const_cast<FunctionDecl*>(FD)));
-    auto *M = CodeGen->GetModule();
+    auto *M = (*CodeGen)->GetModule();
     return M;
 }

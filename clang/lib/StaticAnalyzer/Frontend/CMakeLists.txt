@@ -14,10 +14,12 @@ add_clang_library(clangStaticAnalyzerFrontend
   ModelInjector.cpp
 
   LINK_LIBS
+  LLVMCore
   clangAST
   clangASTMatchers
   clangAnalysis
   clangBasic
+  clangCodeGen
   clangCrossTU
   clangFrontend
   clangLex

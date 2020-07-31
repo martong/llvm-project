@@ -9,12 +9,45 @@
 #include "clang/StaticAnalyzer/Frontend/FrontendActions.h"
 #include "clang/StaticAnalyzer/Frontend/AnalysisConsumer.h"
 #include "clang/StaticAnalyzer/Frontend/ModelConsumer.h"
+#include "clang/Frontend/MultiplexConsumer.h"
+
+#include "clang/CodeGen/ModuleBuilder.h"
+#include "clang/Frontend/CompilerInstance.h"
+
+#include "llvm/IR/LLVMContext.h"
+
 using namespace clang;
 using namespace ento;
 
+namespace {
+std::unique_ptr<CodeGenerator> BuildCodeGen(CompilerInstance &CI,
+                                            llvm::LLVMContext &LLVMCtx) {
+  StringRef ModuleName("csa_module");
+  return std::unique_ptr<CodeGenerator>(CreateLLVMCodeGen(
+      CI.getDiagnostics(), ModuleName, CI.getHeaderSearchOpts(),
+      CI.getPreprocessorOpts(), CI.getCodeGenOpts(), LLVMCtx));
+}
+} // namespace
+
+AnalysisAction::~AnalysisAction() {}
+
 std::unique_ptr<ASTConsumer>
 AnalysisAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
-  return CreateAnalysisConsumer(CI);
+  std::vector<std::unique_ptr<ASTConsumer>> ASTConsumers;
+  auto AConsumer = CreateAnalysisConsumer(CI);
+
+  // FIXME handle Opts
+  LLVMCtx = std::make_shared<llvm::LLVMContext>();
+  auto CGConsumer = BuildCodeGen(CI, *LLVMCtx);
+  AConsumer->setCodeGen(CGConsumer.get());
+  ASTConsumers.push_back(std::move(CGConsumer));
+
+  ASTConsumers.push_back(std::move(AConsumer));
+  return std::make_unique<MultiplexConsumer>(std::move(ASTConsumers));
+}
+
+std::unique_ptr<AnalysisAction> CreateAnalysisAction() {
+  return std::make_unique<AnalysisAction>();
 }
 
 ParseModelFileAction::ParseModelFileAction(llvm::StringMap<Stmt *> &Bodies)

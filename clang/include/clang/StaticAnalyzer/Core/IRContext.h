@@ -30,14 +30,10 @@ class FunctionDecl;
 namespace ento {
 
 class IRContext {
-  std::unique_ptr<clang::CodeGenerator> CodeGen;
-  std::unique_ptr<llvm::LLVMContext> LLVMCtx;
+  clang::CodeGenerator** CodeGen;
 
 public:
-  IRContext(CompilerInstance &CI);
-  ~IRContext();
-  void handleTranslationUnit(ASTContext &C);
-  llvm::Module *getModule();
+  IRContext(clang::CodeGenerator** CodeGen) : CodeGen(CodeGen) {}
   llvm::Module *getFunction(const FunctionDecl *FD);
 };
 

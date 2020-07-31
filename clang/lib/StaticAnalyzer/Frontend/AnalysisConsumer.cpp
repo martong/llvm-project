@@ -124,7 +124,7 @@ public:
                    CodeInjector *injector)
       : RecVisitorMode(0), RecVisitorBR(nullptr), Ctx(nullptr),
         PP(CI.getPreprocessor()), OutDir(outdir), Opts(std::move(opts)),
-        Plugins(plugins), Injector(injector), CTU(CI), IRCtx(CI) {
+        Plugins(plugins), Injector(injector), CTU(CI), IRCtx(&CG) {
     DigestAnalyzerOptions();
     if (Opts->PrintStats || Opts->ShouldSerializeStats) {
       AnalyzerTimers = std::make_unique<llvm::TimerGroup>(
@@ -543,7 +543,6 @@ void AnalysisConsumer::HandleTranslationUnit(ASTContext &C) {
     reportAnalyzerProgress("All checks are disabled using a supplied option\n");
   } else {
     // Otherwise, just run the analysis.
-    this->IRCtx.handleTranslationUnit(C);
     runAnalysisOnTranslationUnit(C);
   }
 

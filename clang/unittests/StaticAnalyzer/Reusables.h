@@ -60,7 +60,7 @@ public:
   ExprEngineConsumer(CompilerInstance &C)
       : C(C),
         ChkMgr(C.getASTContext(), *C.getAnalyzerOpts(), C.getPreprocessor()),
-        CTU(C), IRCtx(C), Consumers(),
+        CTU(C), IRCtx(nullptr), Consumers(),
         AMgr(C.getASTContext(), C.getPreprocessor(), Consumers,
              CreateRegionStoreManager, CreateRangeConstraintManager, &ChkMgr,
              *C.getAnalyzerOpts()),
