@@ -18,11 +18,14 @@
 
 namespace llvm {
 class LLVMContext;
+class Module;
 } // namespace llvm
 
 namespace clang {
+class ASTContext;
 class CodeGenerator;
 class CompilerInstance;
+class FunctionDecl;
 
 namespace ento {
 
@@ -33,6 +36,9 @@ class IRContext {
 public:
   IRContext(CompilerInstance &CI);
   ~IRContext();
+  void handleTranslationUnit(ASTContext &C);
+  llvm::Module *getModule();
+  llvm::Module *getFunction(const FunctionDecl *FD);
 };
 
 } // namespace ento

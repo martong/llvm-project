@@ -17,10 +17,12 @@
 #include "clang/Analysis/Analyses/LiveVariables.h"
 #include "clang/Analysis/ConstructionContext.h"
 #include "clang/StaticAnalyzer/Core/CheckerManager.h"
+#include "clang/StaticAnalyzer/Core/IRContext.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/ExprEngine.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/IR/Module.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/SaveAndRestore.h"
@@ -1047,6 +1049,15 @@ void ExprEngine::defaultEvalCall(NodeBuilder &Bldr, ExplodedNode *Pred,
   // Make sure we have the most recent state attached to the call.
   ProgramStateRef State = Pred->getState();
   CallEventRef<> Call = CallTemplate.cloneWithState(State);
+
+  if (const Decl *D = Call->getRuntimeDefinition().getDecl())
+    if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D))
+      if (FD->getDefinition()) {
+
+        auto *M = this->getIRContext()->getFunction(FD->getDefinition());
+        // M->dump();
+        // assert(M->getFunctionList().size() >= 1);
+      }
 
   // Special-case trivial assignment operators.
   if (isTrivialObjectAssignment(*Call)) {

@@ -543,6 +543,7 @@ void AnalysisConsumer::HandleTranslationUnit(ASTContext &C) {
     reportAnalyzerProgress("All checks are disabled using a supplied option\n");
   } else {
     // Otherwise, just run the analysis.
+    this->IRCtx.handleTranslationUnit(C);
     runAnalysisOnTranslationUnit(C);
   }
 
@@ -695,7 +696,7 @@ void AnalysisConsumer::RunPathSensitiveChecks(Decl *D,
   if (!Mgr->getAnalysisDeclContext(D)->getAnalysis<RelaxedLiveVariables>())
     return;
 
-  ExprEngine Eng(CTU, *Mgr, VisitedCallees, &FunctionSummaries, IMode);
+  ExprEngine Eng(CTU, IRCtx, *Mgr, VisitedCallees, &FunctionSummaries, IMode);
 
   // Execute the worklist algorithm.
   if (ExprEngineTimer)

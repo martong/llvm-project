@@ -10,8 +10,9 @@
 #define LLVM_CLANG_UNITTESTS_STATICANALYZER_REUSABLES_H
 
 #include "clang/ASTMatchers/ASTMatchFinder.h"
-#include "clang/Frontend/CompilerInstance.h"
 #include "clang/CrossTU/CrossTranslationUnit.h"
+#include "clang/Frontend/CompilerInstance.h"
+#include "clang/StaticAnalyzer/Core/IRContext.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/ExprEngine.h"
 
 namespace clang {
@@ -46,6 +47,7 @@ private:
   // We need to construct all of these in order to construct ExprEngine.
   CheckerManager ChkMgr;
   cross_tu::CrossTranslationUnitContext CTU;
+  IRContext IRCtx;
   PathDiagnosticConsumers Consumers;
   AnalysisManager AMgr;
   SetOfConstDecls VisitedCallees;
@@ -58,12 +60,12 @@ public:
   ExprEngineConsumer(CompilerInstance &C)
       : C(C),
         ChkMgr(C.getASTContext(), *C.getAnalyzerOpts(), C.getPreprocessor()),
-        CTU(C), Consumers(),
+        CTU(C), IRCtx(C), Consumers(),
         AMgr(C.getASTContext(), C.getPreprocessor(), Consumers,
              CreateRegionStoreManager, CreateRangeConstraintManager, &ChkMgr,
              *C.getAnalyzerOpts()),
-        VisitedCallees(), FS(),
-        Eng(CTU, AMgr, &VisitedCallees, &FS, ExprEngine::Inline_Regular) {}
+        VisitedCallees(), FS(), Eng(CTU, IRCtx, AMgr, &VisitedCallees, &FS,
+                                    ExprEngine::Inline_Regular) {}
 };
 
 } // namespace ento

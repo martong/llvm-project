@@ -87,6 +87,7 @@ class EndOfFunctionNodeBuilder;
 class ExplodedNodeSet;
 class ExplodedNode;
 class IndirectGotoNodeBuilder;
+class IRContext;
 class MemRegion;
 struct NodeBuilderContext;
 class NodeBuilderWithSinks;
@@ -140,6 +141,8 @@ public:
 private:
   cross_tu::CrossTranslationUnitContext &CTU;
 
+  IRContext &IRCtx;
+
   AnalysisManager &AMgr;
 
   AnalysisDeclContextManager &AnalysisDeclContexts;
@@ -181,8 +184,8 @@ private:
   InliningModes HowToInline;
 
 public:
-  ExprEngine(cross_tu::CrossTranslationUnitContext &CTU, AnalysisManager &mgr,
-             SetOfConstDecls *VisitedCalleesIn,
+  ExprEngine(cross_tu::CrossTranslationUnitContext &CTU, IRContext &IRCtx,
+             AnalysisManager &mgr, SetOfConstDecls *VisitedCalleesIn,
              FunctionSummariesTy *FS, InliningModes HowToInlineIn);
 
   virtual ~ExprEngine() = default;
@@ -223,6 +226,8 @@ public:
   getCrossTranslationUnitContext() {
     return &CTU;
   }
+
+  IRContext *getIRContext() { return &IRCtx; }
 
   const NodeBuilderContext &getBuilderContext() {
     assert(currBldrCtx);
