@@ -4,9 +4,9 @@ set(LLVM_LINK_COMPONENTS
 )
 
 add_clang_library(clangStaticAnalyzerCore
-  APSIntType.cpp
   AnalysisManager.cpp
   AnalyzerOptions.cpp
+  APSIntType.cpp
   BasicValueFactory.cpp
   BlockCounter.cpp
   BugReporter.cpp
@@ -26,11 +26,12 @@ add_clang_library(clangStaticAnalyzerCore
   ExplodedGraph.cpp
   ExprEngine.cpp
   ExprEngineC.cpp
-  ExprEngineCXX.cpp
   ExprEngineCallAndReturn.cpp
+  ExprEngineCXX.cpp
   ExprEngineObjC.cpp
   FunctionSummary.cpp
   HTMLDiagnostics.cpp
+  IRContext.cpp
   IssueHash.cpp
   LoopUnrolling.cpp
   LoopWidening.cpp
@@ -52,10 +53,12 @@ add_clang_library(clangStaticAnalyzerCore
   WorkList.cpp
 
   LINK_LIBS
+  LLVMCore
+  clangAnalysis
   clangAST
   clangASTMatchers
-  clangAnalysis
   clangBasic
+  clangCodeGen
   clangCrossTU
   clangFrontend
   clangLex
