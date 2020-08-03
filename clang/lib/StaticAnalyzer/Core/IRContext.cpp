@@ -6,9 +6,10 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/StaticAnalyzer/Core/IRContext.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/DeclGroup.h"
-#include "clang/StaticAnalyzer/Core/IRContext.h"
+#include "clang/CodeGen/CodeGenMangling.h"
 #include "clang/CodeGen/ModuleBuilder.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "llvm/IR/LLVMContext.h"
@@ -18,9 +19,28 @@ using namespace llvm;
 using namespace clang;
 using namespace ento;
 
-llvm::Module *IRContext::getFunction(const FunctionDecl *FD) {
+llvm::Function *IRContext::getFunction(const FunctionDecl *FD) {
     assert(*CodeGen);
-    //CodeGen->HandleTopLevelDecl(DeclGroupRef(const_cast<FunctionDecl*>(FD)));
+
     auto *M = (*CodeGen)->GetModule();
-    return M;
+
+    static int i = 0;
+    if (i == 0) {
+        //M->dump();
+        ++i;
+    }
+
+    if (isa<CXXConstructorDecl>(FD) || isa<CXXDestructorDecl>(FD) ||
+        FD->hasAttr<CUDAGlobalAttr>())
+      return nullptr;
+
+    CodeGen::CodeGenModule &CGM = (*CodeGen)->CGM();
+    StringRef Name = getMangledName(CGM, FD);
+    //llvm::errs() << "Name: " << Name << "\n";
+
+    // There are functions which are not generated. E.g. not used operator=, etc.
+    //if(!M->getFunction(Name)) {
+      //llvm::errs() << "Name: " << Name << "\n";
+    //}
+    return M->getFunction(Name);
 }

@@ -68,6 +68,7 @@ add_clang_library(clangCodeGen
   CodeGenABITypes.cpp
   CodeGenAction.cpp
   CodeGenFunction.cpp
+  CodeGenMangling.cpp
   CodeGenModule.cpp
   CodeGenPGO.cpp
   CodeGenTBAA.cpp

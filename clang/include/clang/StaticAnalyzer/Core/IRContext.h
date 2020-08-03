@@ -18,7 +18,7 @@
 
 namespace llvm {
 class LLVMContext;
-class Module;
+class Function;
 } // namespace llvm
 
 namespace clang {
@@ -34,7 +34,7 @@ class IRContext {
 
 public:
   IRContext(clang::CodeGenerator** CodeGen) : CodeGen(CodeGen) {}
-  llvm::Module *getFunction(const FunctionDecl *FD);
+  llvm::Function *getFunction(const FunctionDecl *FD);
 };
 
 } // namespace ento

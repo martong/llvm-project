@@ -1053,10 +1053,12 @@ void ExprEngine::defaultEvalCall(NodeBuilder &Bldr, ExplodedNode *Pred,
   if (const Decl *D = Call->getRuntimeDefinition().getDecl())
     if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D))
       if (FD->getDefinition()) {
-
-        auto *M = this->getIRContext()->getFunction(FD->getDefinition());
-        M->dump();
-        // assert(M->getFunctionList().size() >= 1);
+        if (auto *F = this->getIRContext()->getFunction(FD)) {
+          F->getAttributes().hasFnAttribute(llvm::Attribute::ReadNone);
+          //llvm::errs() << F->getAttributes().getAsString(
+                              //llvm::AttributeList::FunctionIndex)
+                       //<< "\n";
+        }
       }
 
   // Special-case trivial assignment operators.
