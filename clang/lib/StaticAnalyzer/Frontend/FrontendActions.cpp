@@ -21,22 +21,16 @@ using namespace ento;
 
 namespace {
 std::unique_ptr<CodeGenerator> BuildCodeGen(CompilerInstance &CI,
-                                            llvm::LLVMContext &LLVMCtx) {
+                                            llvm::LLVMContext &LLVMCtx,
+                                            DiagnosticsEngine &CodeGenDiags) {
   StringRef ModuleName("csa_module");
   CodeGenOptions &CGO = CI.getCodeGenOpts();
   // Set the optimization level, so CodeGenFunciton would emit lifetime
   // markers which are used by some LLVM analysis (e.g. AliasAnalysis).
   CGO.OptimizationLevel = 2; // -O2
 
-  DiagnosticsEngine &SADiagEng = CI.getDiagnostics();
-
-  DiagnosticsEngine *DE = new DiagnosticsEngine(
-      SADiagEng.getDiagnosticIDs(), &SADiagEng.getDiagnosticOptions(),
-      SADiagEng.getClient(), SADiagEng.ownsClient());
-  DE->setSuppressAllDiagnostics(true);
-
   return std::unique_ptr<CodeGenerator>(
-      CreateLLVMCodeGen(*DE, ModuleName, CI.getHeaderSearchOpts(),
+      CreateLLVMCodeGen(CodeGenDiags, ModuleName, CI.getHeaderSearchOpts(),
                         CI.getPreprocessorOpts(), CGO, LLVMCtx));
 }
 } // namespace
@@ -50,8 +44,14 @@ AnalysisAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
 
   AnalyzerOptionsRef Opts = CI.getAnalyzerOpts();
   if (Opts->GenerateLLVMIR) {
+    DiagnosticsEngine &SADiagEng = CI.getDiagnostics();
+    // Supress diagnostics during CodeGen.
+    CodeGenDiags = std::make_unique<DiagnosticsEngine>(
+        SADiagEng.getDiagnosticIDs(), &SADiagEng.getDiagnosticOptions(),
+        SADiagEng.getClient(), /*ShouldOwnClient=*/false);
+    CodeGenDiags->setSuppressAllDiagnostics(true);
     LLVMCtx = std::make_shared<llvm::LLVMContext>();
-    auto CGConsumer = BuildCodeGen(CI, *LLVMCtx);
+    auto CGConsumer = BuildCodeGen(CI, *LLVMCtx, *CodeGenDiags);
     AConsumer->setCodeGen(CGConsumer.get());
     ASTConsumers.push_back(std::move(CGConsumer));
   }

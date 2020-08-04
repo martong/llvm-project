@@ -36,6 +36,7 @@ class AnalysisAction : public ASTFrontendAction {
   // Cannot be a unique_ptr because then ClangFrontendTool would
   // depend on this lib.
   std::shared_ptr<llvm::LLVMContext> LLVMCtx;
+  std::unique_ptr<DiagnosticsEngine> CodeGenDiags;
 protected:
   std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &CI,
                                                  StringRef InFile) override;
