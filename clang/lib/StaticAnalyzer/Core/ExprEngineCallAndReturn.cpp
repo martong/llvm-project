@@ -1060,17 +1060,6 @@ void ExprEngine::defaultEvalCall(NodeBuilder &Bldr, ExplodedNode *Pred,
   ProgramStateRef State = Pred->getState();
   CallEventRef<> Call = CallTemplate.cloneWithState(State);
 
-  if (const Decl *D = Call->getRuntimeDefinition().getDecl())
-    if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D))
-      if (FD->getDefinition()) {
-        if (auto *F = this->getIRContext()->getFunction(FD)) {
-          F->getAttributes().hasFnAttribute(llvm::Attribute::ReadNone);
-          //llvm::errs() << F->getAttributes().getAsString(
-                              //llvm::AttributeList::FunctionIndex)
-                       //<< "\n";
-        }
-      }
-
   // Special-case trivial assignment operators.
   if (isTrivialObjectAssignment(*Call)) {
     performTrivialCopy(Bldr, Pred, *Call);
