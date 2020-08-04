@@ -48,11 +48,13 @@ AnalysisAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
   std::vector<std::unique_ptr<ASTConsumer>> ASTConsumers;
   auto AConsumer = CreateAnalysisConsumer(CI);
 
-  // FIXME handle Opts
-  LLVMCtx = std::make_shared<llvm::LLVMContext>();
-  auto CGConsumer = BuildCodeGen(CI, *LLVMCtx);
-  AConsumer->setCodeGen(CGConsumer.get());
-  ASTConsumers.push_back(std::move(CGConsumer));
+  AnalyzerOptionsRef Opts = CI.getAnalyzerOpts();
+  if (Opts->GenerateLLVMIR) {
+    LLVMCtx = std::make_shared<llvm::LLVMContext>();
+    auto CGConsumer = BuildCodeGen(CI, *LLVMCtx);
+    AConsumer->setCodeGen(CGConsumer.get());
+    ASTConsumers.push_back(std::move(CGConsumer));
+  }
 
   ASTConsumers.push_back(std::move(AConsumer));
   return std::make_unique<MultiplexConsumer>(std::move(ASTConsumers));

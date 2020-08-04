@@ -28,6 +28,9 @@ using namespace clang;
 using namespace ento;
 
 void IRContext::init() {
+  if ((*CodeGen) == nullptr)
+    return;
+
   // TargetMachine is not set, so we will not do optimizations based on
   // target-aware cost modeling of IR contructs. Still, a default
   // TargetIRAnalysis is registerd in registerFunctionAnalyses. That will use
@@ -74,27 +77,17 @@ void IRContext::init() {
 }
 
 llvm::Function *IRContext::getFunction(const FunctionDecl *FD) {
-    assert(*CodeGen);
+  if ((*CodeGen) == nullptr)
+    return nullptr;
 
-    auto *M = (*CodeGen)->GetModule();
+  if (isa<CXXConstructorDecl>(FD) || isa<CXXDestructorDecl>(FD) ||
+      FD->hasAttr<CUDAGlobalAttr>())
+    return nullptr;
 
-    static int i = 0;
-    if (i == 0) {
-        //M->dump();
-        ++i;
-    }
+  CodeGen::CodeGenModule &CGM = (*CodeGen)->CGM();
+  StringRef Name = getMangledName(CGM, FD);
 
-    if (isa<CXXConstructorDecl>(FD) || isa<CXXDestructorDecl>(FD) ||
-        FD->hasAttr<CUDAGlobalAttr>())
-      return nullptr;
-
-    CodeGen::CodeGenModule &CGM = (*CodeGen)->CGM();
-    StringRef Name = getMangledName(CGM, FD);
-    //llvm::errs() << "Name: " << Name << "\n";
-
-    // There are functions which are not generated. E.g. not used operator=, etc.
-    //if(!M->getFunction(Name)) {
-      //llvm::errs() << "Name: " << Name << "\n";
-    //}
-    return M->getFunction(Name);
+  auto *M = (*CodeGen)->GetModule();
+  // There are functions which are not generated. E.g. not used operator=, etc.
+  return M->getFunction(Name);
 }

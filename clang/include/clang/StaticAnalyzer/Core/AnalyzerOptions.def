@@ -314,6 +314,11 @@ ANALYZER_OPTION(bool, ShouldDisplayCheckerNameForText, "display-checker-name",
                 "Display the checker name for textual outputs",
                 true)
 
+ANALYZER_OPTION(bool, GenerateLLVMIR, "generate-llvm-ir",
+                "Whether to generate LLVM IR for the translation unit. "
+                "The analyzer can be more precise by using info from the IR.",
+                false)
+
 //===----------------------------------------------------------------------===//
 // Unsigned analyzer options.
 //===----------------------------------------------------------------------===//
