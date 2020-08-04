@@ -13,6 +13,7 @@ int foo(int *x) { return *x; }
 
 void test() {
   g = 3;
+  for (int i = 0; i < 5; ++i, ++g);
   int l = 0;
   foo(&l);
 }

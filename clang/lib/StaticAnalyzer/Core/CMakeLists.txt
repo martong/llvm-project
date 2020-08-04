@@ -54,6 +54,9 @@ add_clang_library(clangStaticAnalyzerCore
 
   LINK_LIBS
   LLVMCore
+  LLVMAnalysis
+  LLVMPasses
+  LLVMTransformUtils
   clangAnalysis
   clangAST
   clangASTMatchers

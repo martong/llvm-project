@@ -34,6 +34,7 @@ class IRContext {
 
 public:
   IRContext(clang::CodeGenerator** CodeGen) : CodeGen(CodeGen) {}
+  void init();
   llvm::Function *getFunction(const FunctionDecl *FD);
 };
 

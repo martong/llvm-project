@@ -23,9 +23,13 @@ namespace {
 std::unique_ptr<CodeGenerator> BuildCodeGen(CompilerInstance &CI,
                                             llvm::LLVMContext &LLVMCtx) {
   StringRef ModuleName("csa_module");
+  CodeGenOptions &CGO = CI.getCodeGenOpts();
+  // Set the optimization level, so CodeGenFunciton would emit lifetime
+  // markers which are used by some LLVM analysis (e.g. AliasAnalysis).
+  CGO.OptimizationLevel = 2; // -O2
   return std::unique_ptr<CodeGenerator>(CreateLLVMCodeGen(
       CI.getDiagnostics(), ModuleName, CI.getHeaderSearchOpts(),
-      CI.getPreprocessorOpts(), CI.getCodeGenOpts(), LLVMCtx));
+      CI.getPreprocessorOpts(), CGO, LLVMCtx));
 }
 } // namespace
 

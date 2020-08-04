@@ -543,6 +543,7 @@ void AnalysisConsumer::HandleTranslationUnit(ASTContext &C) {
     reportAnalyzerProgress("All checks are disabled using a supplied option\n");
   } else {
     // Otherwise, just run the analysis.
+    this->IRCtx.init();
     runAnalysisOnTranslationUnit(C);
   }
 
