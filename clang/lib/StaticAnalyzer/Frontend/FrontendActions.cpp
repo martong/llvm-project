@@ -27,9 +27,17 @@ std::unique_ptr<CodeGenerator> BuildCodeGen(CompilerInstance &CI,
   // Set the optimization level, so CodeGenFunciton would emit lifetime
   // markers which are used by some LLVM analysis (e.g. AliasAnalysis).
   CGO.OptimizationLevel = 2; // -O2
-  return std::unique_ptr<CodeGenerator>(CreateLLVMCodeGen(
-      CI.getDiagnostics(), ModuleName, CI.getHeaderSearchOpts(),
-      CI.getPreprocessorOpts(), CGO, LLVMCtx));
+
+  DiagnosticsEngine &SADiagEng = CI.getDiagnostics();
+
+  DiagnosticsEngine *DE = new DiagnosticsEngine(
+      SADiagEng.getDiagnosticIDs(), &SADiagEng.getDiagnosticOptions(),
+      SADiagEng.getClient(), SADiagEng.ownsClient());
+  DE->setSuppressAllDiagnostics(true);
+
+  return std::unique_ptr<CodeGenerator>(
+      CreateLLVMCodeGen(*DE, ModuleName, CI.getHeaderSearchOpts(),
+                        CI.getPreprocessorOpts(), CGO, LLVMCtx));
 }
 } // namespace
 

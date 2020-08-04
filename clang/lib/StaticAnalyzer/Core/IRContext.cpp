@@ -34,10 +34,13 @@ void IRContext::init() {
   // the module's datalayout to construct a baseline conservative result.
   PassBuilder PB;
 
-  LoopAnalysisManager LAM(true);
-  FunctionAnalysisManager FAM(true);
-  CGSCCAnalysisManager CGAM(true);
-  ModuleAnalysisManager MAM(true);
+  // FIXME make this an option.
+  constexpr const bool Debug = false;
+
+  LoopAnalysisManager LAM(Debug);
+  FunctionAnalysisManager FAM(Debug);
+  CGSCCAnalysisManager CGAM(Debug);
+  ModuleAnalysisManager MAM(Debug);
 
   // Register the AA manager first so that our version is the one used.
   FAM.registerPass([&] { return PB.buildDefaultAAPipeline(); });
@@ -58,7 +61,7 @@ void IRContext::init() {
   PB.registerLoopAnalyses(LAM);
   PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
 
-  ModulePassManager MPM(true);
+  ModulePassManager MPM(Debug);
 
   PB.registerPipelineStartEPCallback([](ModulePassManager &MPM) {
     MPM.addPass(createModuleToFunctionPassAdaptor(
@@ -66,9 +69,8 @@ void IRContext::init() {
   });
 
   MPM = PB.buildPerModuleDefaultPipeline(PassBuilder::OptimizationLevel::O2,
-                                         /*debug=*/true);
+                                         Debug);
   MPM.run(*M, MAM);
-  M->dump();
 }
 
 llvm::Function *IRContext::getFunction(const FunctionDecl *FD) {
