@@ -42,6 +42,7 @@ const T *findDeclByName(const Decl *Where, StringRef Name) {
 class ExprEngineConsumer : public ASTConsumer {
 protected:
   CompilerInstance &C;
+  CodeGenerator *CG = nullptr;
 
 private:
   // We need to construct all of these in order to construct ExprEngine.
@@ -60,7 +61,7 @@ public:
   ExprEngineConsumer(CompilerInstance &C)
       : C(C),
         ChkMgr(C.getASTContext(), *C.getAnalyzerOpts(), C.getPreprocessor()),
-        CTU(C), IRCtx(nullptr), Consumers(),
+        CTU(C), IRCtx(CG), Consumers(),
         AMgr(C.getASTContext(), C.getPreprocessor(), Consumers,
              CreateRegionStoreManager, CreateRangeConstraintManager, &ChkMgr,
              *C.getAnalyzerOpts()),

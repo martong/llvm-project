@@ -28,7 +28,7 @@ using namespace clang;
 using namespace ento;
 
 void IRContext::init() {
-  if ((*CodeGen) == nullptr)
+  if (CodeGen == nullptr)
     return;
 
   // TargetMachine is not set, so we will not do optimizations based on
@@ -48,7 +48,7 @@ void IRContext::init() {
   // Register the AA manager first so that our version is the one used.
   FAM.registerPass([&] { return PB.buildDefaultAAPipeline(); });
 
-  auto *M = (*CodeGen)->GetModule();
+  auto *M = CodeGen->GetModule();
 
   // Register the target library analysis directly and give it a customized
   // preset TLI.
@@ -77,17 +77,17 @@ void IRContext::init() {
 }
 
 llvm::Function *IRContext::getFunction(const FunctionDecl *FD) {
-  if ((*CodeGen) == nullptr)
+  if (CodeGen == nullptr)
     return nullptr;
 
   if (isa<CXXConstructorDecl>(FD) || isa<CXXDestructorDecl>(FD) ||
       FD->hasAttr<CUDAGlobalAttr>())
     return nullptr;
 
-  CodeGen::CodeGenModule &CGM = (*CodeGen)->CGM();
+  CodeGen::CodeGenModule &CGM = CodeGen->CGM();
   StringRef Name = getMangledName(CGM, FD);
 
-  auto *M = (*CodeGen)->GetModule();
+  auto *M = CodeGen->GetModule();
   // There are functions which are not generated. E.g. not used operator=, etc.
   return M->getFunction(Name);
 }

@@ -30,10 +30,11 @@ class FunctionDecl;
 namespace ento {
 
 class IRContext {
-  clang::CodeGenerator** CodeGen;
+  // Set by AnalysisAction if the AnalyzerOptions requires that.
+  clang::CodeGenerator*& CodeGen;
 
 public:
-  IRContext(clang::CodeGenerator** CodeGen) : CodeGen(CodeGen) {}
+  IRContext(clang::CodeGenerator*& CodeGen) : CodeGen(CodeGen) {}
   void init();
   llvm::Function *getFunction(const FunctionDecl *FD);
 };
