@@ -709,6 +709,16 @@ ProgramStateRef ExprEngine::bindReturnValue(const CallEvent &Call,
 // a conjured return value.
 void ExprEngine::conservativeEvalCall(const CallEvent &Call, NodeBuilder &Bldr,
                                       ExplodedNode *Pred, ProgramStateRef State) {
+  // Query the LLVM IR whether this function is pure.
+  if (const Decl *D = Call.getRuntimeDefinition().getDecl())
+    if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D))
+      if (FD->getDefinition())
+        if (auto *F = this->getIRContext()->getFunction(FD))
+          // Pure function.
+          if (F->getAttributes().hasFnAttribute(llvm::Attribute::ReadNone) ||
+              F->getAttributes().hasFnAttribute(llvm::Attribute::ReadOnly))
+            return;
+
   State = Call.invalidateRegions(currBldrCtx->blockCount(), State);
   State = bindReturnValue(Call, Pred->getLocationContext(), State);
 
