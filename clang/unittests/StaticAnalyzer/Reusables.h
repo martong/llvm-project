@@ -10,8 +10,8 @@
 #define LLVM_CLANG_UNITTESTS_STATICANALYZER_REUSABLES_H
 
 #include "clang/ASTMatchers/ASTMatchFinder.h"
-#include "clang/CrossTU/CrossTranslationUnit.h"
 #include "clang/Frontend/CompilerInstance.h"
+#include "clang/CrossTU/CrossTranslationUnit.h"
 #include "clang/StaticAnalyzer/Core/IRContext.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/ExprEngine.h"
 

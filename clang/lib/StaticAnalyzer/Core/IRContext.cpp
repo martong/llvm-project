@@ -7,27 +7,19 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/StaticAnalyzer/Core/IRContext.h"
-#include "clang/AST/ASTContext.h"
-#include "clang/AST/DeclGroup.h"
 #include "clang/CodeGen/CodeGenMangling.h"
 #include "clang/CodeGen/ModuleBuilder.h"
-#include "clang/Frontend/CompilerInstance.h"
 
-#include "llvm/Analysis/AliasAnalysis.h"
-#include "llvm/Analysis/LoopAnalysisManager.h"
-#include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/PassManager.h"
-#include "llvm/Pass.h"
 #include "llvm/Passes/PassBuilder.h"
-#include "llvm/Passes/StandardInstrumentations.h"
 #include "llvm/Transforms/Utils/EntryExitInstrumenter.h"
 
 using namespace llvm;
 using namespace clang;
 using namespace ento;
 
-void IRContext::init() {
+void IRContext::runOptimizerPipeline() {
   if (CodeGen == nullptr)
     return;
 
@@ -76,18 +68,33 @@ void IRContext::init() {
   MPM.run(*M, MAM);
 }
 
-llvm::Function *IRContext::getFunction(const FunctionDecl *FD) {
+llvm::Function *IRContext::getFunction(GlobalDecl GD) {
   if (CodeGen == nullptr)
     return nullptr;
 
-  if (isa<CXXConstructorDecl>(FD) || isa<CXXDestructorDecl>(FD) ||
-      FD->hasAttr<CUDAGlobalAttr>())
-    return nullptr;
-
   CodeGen::CodeGenModule &CGM = CodeGen->CGM();
-  StringRef Name = getMangledName(CGM, FD);
+  StringRef Name = getMangledName(CGM, GD);
 
   auto *M = CodeGen->GetModule();
   // There are functions which are not generated. E.g. not used operator=, etc.
   return M->getFunction(Name);
+}
+
+llvm::Function *IRContext::getFunction(const FunctionDecl *FD) {
+  if (CodeGen == nullptr)
+    return nullptr;
+
+  // We use the complete versions of the constructors and desctructors.
+  // Use the other overload of getFunction to get the base object ctor/dtor.
+  GlobalDecl GD;
+  if (const auto *CD = dyn_cast<CXXConstructorDecl>(FD))
+    GD = GlobalDecl(CD, Ctor_Complete);
+  else if (const auto *DD = dyn_cast<CXXDestructorDecl>(FD))
+    GD = GlobalDecl(DD, Dtor_Complete);
+  else if (FD->hasAttr<CUDAGlobalAttr>())
+    GD = GlobalDecl(FD, KernelReferenceKind::Kernel);
+  else
+    GD = GlobalDecl(FD);
+
+  return getFunction(GD);
 }

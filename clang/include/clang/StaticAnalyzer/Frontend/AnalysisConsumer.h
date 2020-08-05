@@ -51,7 +51,7 @@ public:
   virtual void
   AddCheckerRegistrationFn(std::function<void(CheckerRegistry &)> Fn) = 0;
 
-  void setCodeGen(CodeGenerator* Cg) { this->CG = Cg; }
+  void setCodeGen(CodeGenerator* Cg) { CG = Cg; }
 };
 
 /// CreateAnalysisConsumer - Creates an ASTConsumer to run various code

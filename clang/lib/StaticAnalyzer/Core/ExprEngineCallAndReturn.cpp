@@ -22,7 +22,7 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/ExprEngine.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/Statistic.h"
-#include "llvm/IR/Module.h"
+#include "llvm/IR/Function.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/SaveAndRestore.h"
@@ -713,7 +713,7 @@ void ExprEngine::conservativeEvalCall(const CallEvent &Call, NodeBuilder &Bldr,
   if (const Decl *D = Call.getRuntimeDefinition().getDecl())
     if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D))
       if (FD->getDefinition())
-        if (auto *F = this->getIRContext()->getFunction(FD))
+        if (auto *F = getIRContext()->getFunction(FD))
           // Pure function.
           if (F->getAttributes().hasFnAttribute(llvm::Attribute::ReadNone) ||
               F->getAttributes().hasFnAttribute(llvm::Attribute::ReadOnly))
