@@ -1071,6 +1071,10 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
   }
 
   if (Field1->isBitField()) {
+    bool isVD1 = Field1->getBitWidth()->isValueDependent();
+    bool isVD2 = Field2->getBitWidth()->isValueDependent();
+    if (isVD1 || isVD2)
+      return isVD1 && isVD2;
     // Make sure that the bit-fields are the same length.
     unsigned Bits1 = Field1->getBitWidthValue(Context.FromCtx);
     unsigned Bits2 = Field2->getBitWidthValue(Context.ToCtx);

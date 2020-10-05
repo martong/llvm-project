@@ -906,6 +906,12 @@ TEST_F(StructuralEquivalenceTemplateTest, DifferentTemplateArgKind) {
   EXPECT_FALSE(testStructuralMatch(t));
 }
 
+TEST_F(StructuralEquivalenceTemplateTest, DependentFieldDecl) {
+  const char *Code = "template <class T> class foo { int a : sizeof(T); };";
+  auto t = makeNamedDecls(Code, Code, Lang_CXX03);
+  EXPECT_TRUE(testStructuralMatch(t));
+}
+
 TEST_F(StructuralEquivalenceTemplateTest, ExplicitBoolSame) {
   auto Decls = makeNamedDecls(
       "template <bool b> struct foo {explicit(b) foo(int);};",
