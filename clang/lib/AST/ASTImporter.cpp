@@ -8071,11 +8071,13 @@ Expected<Attr *> ASTImporter::Import(const Attr *FromAttr) {
   SourceRange ToRange;
   if (Error Err = importInto(ToRange, FromAttr->getRange()))
     return std::move(Err);
+  IdentifierInfo *ToAttrName = Import(FromAttr->getAttrName());
+  IdentifierInfo *ToScopeName = Import(FromAttr->getScopeName());
 
   // FIXME: Is there some kind of AttrVisitor to use here?
   switch (FromAttr->getKind()) {
   case attr::Aligned: {
-    auto *From = cast<AlignedAttr>(FromAttr);
+    const auto *From = cast<AlignedAttr>(FromAttr);
     AlignedAttr *To;
     auto CreateAlign = [&](bool IsAlignmentExpr, void *Alignment) {
       return AlignedAttr::Create(ToContext, IsAlignmentExpr, Alignment, ToRange,
@@ -8094,8 +8096,15 @@ Expected<Attr *> ASTImporter::Import(const Attr *FromAttr) {
         return ToTOrErr.takeError();
     }
     To->setInherited(From->isInherited());
-    To->setPackExpansion(From->isPackExpansion());
-    To->setImplicit(From->isImplicit());
+    ToAttr = To;
+    break;
+  }
+  case attr::Format: {
+    const auto *From = cast<FormatAttr>(FromAttr);
+    FormatAttr *To;
+    IdentifierInfo *ToAttrType = Import(From->getType());
+    To = FormatAttr::Create(ToContext, ToAttrType, From->getFormatIdx(), From->getFirstArg(), ToRange, From->getSyntax());
+    To->setInherited(From->isInherited());
     ToAttr = To;
     break;
   }
@@ -8106,8 +8115,10 @@ Expected<Attr *> ASTImporter::Import(const Attr *FromAttr) {
     ToAttr->setRange(ToRange);
     break;
   }
+  ToAttr->setAttributeSpellingListIndex(FromAttr->getAttributeSpellingListIndex());
+  ToAttr->setPackExpansion(FromAttr->isPackExpansion());
+  ToAttr->setImplicit(FromAttr->isImplicit());
   assert(ToAttr && "Attribute should be created.");
-  
   return ToAttr;
 }
 
