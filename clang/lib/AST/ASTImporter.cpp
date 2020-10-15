@@ -397,6 +397,7 @@ namespace clang {
     Error ImportImplicitMethods(const CXXRecordDecl *From, CXXRecordDecl *To);
 
     Expected<CXXCastPath> ImportCastPath(CastExpr *E);
+    Expected<APValue> ImportAPValue(const APValue &FromValue);
 
     using Designator = DesignatedInitExpr::Designator;
 
@@ -8796,6 +8797,11 @@ ASTImporter::Import(const CXXBaseSpecifier *BaseSpec) {
   return Imported;
 }
 
+llvm::Expected<APValue> ASTImporter::Import(const APValue &FromValue) {
+  ASTNodeImporter Importer(*this);
+  return Importer.ImportAPValue(FromValue);
+}
+
 Error ASTImporter::ImportDefinition(Decl *From) {
   ExpectedDecl ToOrErr = Import(From);
   if (!ToOrErr)
@@ -8926,17 +8932,14 @@ Expected<Selector> ASTImporter::Import(Selector FromSel) {
   return ToContext.Selectors.getSelector(FromSel.getNumArgs(), Idents.data());
 }
 
-llvm::Expected<APValue> ASTImporter::Import(const APValue &FromValue) {
+llvm::Expected<APValue>
+ASTNodeImporter::ImportAPValue(const APValue &FromValue) {
   APValue Result;
-  llvm::Error Error = llvm::Error::success();
+  llvm::Error Err = llvm::Error::success();
   auto ImportLoop = [&](const APValue *From, APValue *To, unsigned Size) {
     for (unsigned Idx = 0; Idx < Size; Idx++) {
-      llvm::Expected<APValue> Tmp = Import(From[Idx]);
-      if (!Tmp) {
-        Error = Tmp.takeError();
-        return;
-      }
-      To[Idx] = std::move(Tmp.get());
+      APValue Tmp = importChecked(Err, From[Idx]);
+      To[Idx] = Tmp;
     }
   };
   switch (FromValue.getKind()) {
@@ -8977,48 +8980,41 @@ llvm::Expected<APValue> ASTImporter::Import(const APValue &FromValue) {
     break;
   case APValue::Union: {
     Result.MakeUnion();
-    llvm::Expected<const Decl *> ImpFDecl = Import(FromValue.getUnionField());
-    if (!ImpFDecl)
-      return ImpFDecl.takeError();
-    llvm::Expected<APValue> ImpValue = Import(FromValue.getUnionValue());
-    if (!ImpValue)
-      return ImpValue.takeError();
-    Result.setUnion(cast<FieldDecl>(ImpFDecl.get()), ImpValue.get());
+    const Decl *ImpFDecl = importChecked(Err, FromValue.getUnionField());
+    APValue ImpValue = importChecked(Err, FromValue.getUnionValue());
+    if (Err)
+      return std::move(Err);
+    Result.setUnion(cast<FieldDecl>(ImpFDecl), ImpValue);
     break;
   }
   case APValue::AddrLabelDiff: {
     Result.MakeAddrLabelDiff();
-    llvm::Expected<Expr *> ImpLHS =
-        Import(const_cast<AddrLabelExpr *>(FromValue.getAddrLabelDiffLHS()));
-    if (!ImpLHS)
-      return ImpLHS.takeError();
-    llvm::Expected<Expr *> ImpRHS =
-        Import(const_cast<AddrLabelExpr *>(FromValue.getAddrLabelDiffRHS()));
-    if (!ImpRHS)
-      return ImpRHS.takeError();
-    Result.setAddrLabelDiff(cast<AddrLabelExpr>(ImpLHS.get()),
-                            cast<AddrLabelExpr>(ImpRHS.get()));
+    const Expr *ImpLHS = importChecked(Err, FromValue.getAddrLabelDiffLHS());
+    const Expr *ImpRHS = importChecked(Err, FromValue.getAddrLabelDiffRHS());
+    if (Err)
+      return std::move(Err);
+    Result.setAddrLabelDiff(cast<AddrLabelExpr>(ImpLHS),
+                            cast<AddrLabelExpr>(ImpRHS));
     break;
   }
   case APValue::MemberPointer: {
-    llvm::Expected<const Decl *> ImpMemPtrDecl =
-        Import(FromValue.getMemberPointerDecl());
-    if (!ImpMemPtrDecl)
-      return ImpMemPtrDecl.takeError();
+    const Decl *ImpMemPtrDecl =
+        importChecked(Err, FromValue.getMemberPointerDecl());
+    if (Err)
+      return std::move(Err);
     MutableArrayRef<const CXXRecordDecl *> ToPath =
         Result.setMemberPointerUninit(
-            cast<const ValueDecl>(ImpMemPtrDecl.get()),
+            cast<const ValueDecl>(ImpMemPtrDecl),
             FromValue.isMemberPointerToDerivedMember(),
             FromValue.getMemberPointerPath().size());
     llvm::ArrayRef<const CXXRecordDecl *> FromPath =
         Result.getMemberPointerPath();
     for (unsigned Idx = 0; Idx < FromValue.getMemberPointerPath().size();
          Idx++) {
-      llvm::Expected<const Decl *> ImpDecl = Import(FromPath[Idx]);
-      if (!ImpDecl)
-        return ImpDecl.takeError();
-      ToPath[Idx] = cast<const CXXRecordDecl>(
-          const_cast<Decl *>(ImpDecl.get()->getCanonicalDecl()));
+      const Decl *ImpDecl = importChecked(Err, FromPath[Idx]);
+      if (Err)
+        return std::move(Err);
+      ToPath[Idx] = cast<const CXXRecordDecl>(ImpDecl->getCanonicalDecl());
     }
     break;
   }
@@ -9033,35 +9029,35 @@ llvm::Expected<APValue> ASTImporter::Import(const APValue &FromValue) {
         if (const auto *E =
                 FromValue.getLValueBase().dyn_cast<const Expr *>()) {
           FromElemTy = E->getType();
-          llvm::Expected<Expr *> ImpExpr = Import(const_cast<Expr *>(E));
-          if (!ImpExpr)
-            return ImpExpr.takeError();
-          Base = APValue::LValueBase(ImpExpr.get(),
+          const Expr *ImpExpr = importChecked(Err, E);
+          if (Err)
+            return std::move(Err);
+          Base = APValue::LValueBase(ImpExpr,
                                      FromValue.getLValueBase().getCallIndex(),
                                      FromValue.getLValueBase().getVersion());
         } else {
           FromElemTy =
               FromValue.getLValueBase().get<const ValueDecl *>()->getType();
-          llvm::Expected<const Decl *> ImpDecl =
-              Import(FromValue.getLValueBase().get<const ValueDecl *>());
-          if (!ImpDecl)
-            return ImpDecl.takeError();
-          Base = APValue::LValueBase(cast<ValueDecl>(ImpDecl.get()),
+          const Decl *ImpDecl = importChecked(
+              Err, FromValue.getLValueBase().get<const ValueDecl *>());
+          if (Err)
+            return std::move(Err);
+          Base = APValue::LValueBase(cast<ValueDecl>(ImpDecl),
                                      FromValue.getLValueBase().getCallIndex(),
                                      FromValue.getLValueBase().getVersion());
         }
       } else {
         FromElemTy = FromValue.getLValueBase().getTypeInfoType();
-        llvm::Expected<QualType> ImpTypeInfo = Import(QualType(
-            FromValue.getLValueBase().get<TypeInfoLValue>().getType(), 0));
-        if (!ImpTypeInfo)
-          return ImpTypeInfo.takeError();
-        llvm::Expected<QualType> ImpType =
-            Import(FromValue.getLValueBase().getTypeInfoType());
-        if (!ImpType)
-          return ImpType.takeError();
+        QualType ImpTypeInfo = importChecked(
+            Err,
+            QualType(FromValue.getLValueBase().get<TypeInfoLValue>().getType(),
+                     0));
+        QualType ImpType =
+            importChecked(Err, FromValue.getLValueBase().getTypeInfoType());
+        if (Err)
+          return std::move(Err);
         Base = APValue::LValueBase::getTypeInfo(
-            TypeInfoLValue(ImpTypeInfo.get().getTypePtr()), ImpType.get());
+            TypeInfoLValue(ImpTypeInfo.getTypePtr()), ImpType);
       }
     }
     CharUnits Offset = FromValue.getLValueOffset();
@@ -9077,17 +9073,18 @@ llvm::Expected<APValue> ASTImporter::Import(const APValue &FromValue) {
         if (FromElemTy->isRecordType()) {
           const Decl *FromDecl =
               FromPath[LoopIdx].getAsBaseOrMember().getPointer();
-          llvm::Expected<const Decl *> ImpDecl = Import(FromDecl);
-          if (!ImpDecl)
-            return ImpDecl.takeError();
+          const Decl *ImpDecl = importChecked(Err, FromDecl);
+          if (Err)
+            return std::move(Err);
           if (auto *RD = dyn_cast<CXXRecordDecl>(FromDecl))
-            FromElemTy = FromContext.getRecordType(RD);
+            FromElemTy = Importer.FromContext.getRecordType(RD);
           else
             FromElemTy = cast<ValueDecl>(FromDecl)->getType();
           ToPath[LoopIdx] = APValue::LValuePathEntry(APValue::BaseOrMemberType(
-              ImpDecl.get(), FromPath[LoopIdx].getAsBaseOrMember().getInt()));
+              ImpDecl, FromPath[LoopIdx].getAsBaseOrMember().getInt()));
         } else {
-          FromElemTy = FromContext.getAsArrayType(FromElemTy)->getElementType();
+          FromElemTy =
+              Importer.FromContext.getAsArrayType(FromElemTy)->getElementType();
           ToPath[LoopIdx] = APValue::LValuePathEntry::ArrayIndex(
               FromPath[LoopIdx].getAsArrayIndex());
         }
@@ -9096,8 +9093,8 @@ llvm::Expected<APValue> ASTImporter::Import(const APValue &FromValue) {
       Result.setLValue(Base, Offset, APValue::NoLValuePath{},
                        FromValue.isNullPointer());
   }
-  if (Error)
-    return std::move(Error);
+  if (Err)
+    return std::move(Err);
   return Result;
 }
 

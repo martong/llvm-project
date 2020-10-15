@@ -238,6 +238,7 @@ public:
   friend class ASTRecordReader;
   friend class ASTWriter;
   friend class ASTImporter;
+  friend class ASTNodeImporter;
 
 private:
   ValueKind Kind;
