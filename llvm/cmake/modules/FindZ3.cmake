@@ -43,7 +43,7 @@ find_path(Z3_INCLUDE_DIR NAMES z3.h
 find_library(Z3_LIBRARIES NAMES z3 libz3
   NO_DEFAULT_PATH
   PATHS ${LLVM_Z3_INSTALL_DIR}
-  PATH_SUFFIXES lib bin
+  PATH_SUFFIXES lib lib64 bin
   )
 
 # If Z3 has not been found in LLVM_Z3_INSTALL_DIR look in the default directories
@@ -52,7 +52,7 @@ find_path(Z3_INCLUDE_DIR NAMES z3.h
   )
 
 find_library(Z3_LIBRARIES NAMES z3 libz3
-  PATH_SUFFIXES lib bin
+  PATH_SUFFIXES lib lib64 bin
   )
 
 # Searching for the version of the Z3 library is a best-effort task
