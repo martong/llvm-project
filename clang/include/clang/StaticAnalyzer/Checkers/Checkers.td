@@ -1648,13 +1648,13 @@ def FuchsiaLockChecker : Checker<"Lock">,
 
 let ParentPackage = WebKit in {
 
-def RefCntblBaseVirtualDtorChecker : Checker<"RefCntblBaseVirtualDtor">,
-  HelpText<"Check for any ref-countable base class having virtual destructor.">,
-  Documentation<HasDocumentation>;
-
-def NoUncountedMemberChecker : Checker<"NoUncountedMemberChecker">,
-  HelpText<"Check for no uncounted member variables.">,
-  Documentation<HasDocumentation>;
+//def RefCntblBaseVirtualDtorChecker : Checker<"RefCntblBaseVirtualDtor">,
+//  HelpText<"Check for any ref-countable base class having virtual destructor.">,
+//  Documentation<HasDocumentation>;
+//
+//def NoUncountedMemberChecker : Checker<"NoUncountedMemberChecker">,
+//  HelpText<"Check for no uncounted member variables.">,
+//  Documentation<HasDocumentation>;
 
 def UncountedLambdaCapturesChecker : Checker<"UncountedLambdaCapturesChecker">,
   HelpText<"Check uncounted lambda captures.">,
@@ -1664,9 +1664,9 @@ def UncountedLambdaCapturesChecker : Checker<"UncountedLambdaCapturesChecker">,
 
 let ParentPackage = WebKitAlpha in {
 
-def UncountedCallArgsChecker : Checker<"UncountedCallArgsChecker">,
-  HelpText<"Check uncounted call arguments.">,
-  Documentation<HasDocumentation>;
+//def UncountedCallArgsChecker : Checker<"UncountedCallArgsChecker">,
+//  HelpText<"Check uncounted call arguments.">,
+//  Documentation<HasDocumentation>;
 
 def UncountedLocalVarsChecker : Checker<"UncountedLocalVarsChecker">,
   HelpText<"Check uncounted local variables.">,
