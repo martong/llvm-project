@@ -3329,7 +3329,7 @@ ExpectedDecl ASTNodeImporter::VisitFunctionDecl(FunctionDecl *D) {
       return ToPOrErr.takeError();
   }
 
-  // Common code to import an explicit specifier of different kind of funcitons.
+  // Common code to import an explicit specifier of different kind of functions.
   auto ImportExplicitExpr = [this, &Err](auto *Fun) -> ExpectedExpr {
     Expr *ExplicitExpr = nullptr;
     if (Fun->getExplicitSpecifier().getExpr()) {
@@ -3408,6 +3408,8 @@ ExpectedDecl ASTNodeImporter::VisitFunctionDecl(FunctionDecl *D) {
                               Guide->getExplicitSpecifier().getKind()),
             NameInfo, T, TInfo, ToEndLoc))
       return ToFunction;
+    cast<CXXDeductionGuideDecl>(ToFunction)
+        ->setIsCopyDeductionCandidate(Guide->isCopyDeductionCandidate());
   } else {
     if (GetImportedOrCreateDecl(
             ToFunction, D, Importer.getToContext(), DC, ToInnerLocStart,
