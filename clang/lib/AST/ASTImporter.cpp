@@ -2513,9 +2513,8 @@ ASTNodeImporter::VisitTypedefNameDecl(TypedefNameDecl *D, bool IsAlias) {
     return ToTypedef;
 
   // Import the DeclContext and set it to the Typedef.
-  if (!DC || !LexicalDC)
-    if ((Err = ImportDeclContext(D, DC, LexicalDC)))
-      return std::move(Err);
+  if ((Err = ImportDeclContext(D, DC, LexicalDC)))
+    return std::move(Err);
   ToTypedef->setDeclContext(DC);
   ToTypedef->setLexicalDeclContext(LexicalDC);
   // Add to the lookupTable because we could not do that in MapImported.
