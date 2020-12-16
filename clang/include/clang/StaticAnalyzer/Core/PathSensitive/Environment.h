@@ -36,6 +36,11 @@ class EnvironmentEntry : public std::pair<const Stmt *,
                                           const StackFrameContext *> {
 public:
   EnvironmentEntry(const Stmt *s, const LocationContext *L);
+  EnvironmentEntry()
+      : std::pair<const Stmt *, const StackFrameContext *>(nullptr, nullptr) {}
+  EnvironmentEntry(const Stmt *s, const StackFrameContext *L,
+                   double) // TombStone
+      : std::pair<const Stmt *, const StackFrameContext *>(s, L) {}
 
   const Stmt *getStmt() const { return first; }
   const LocationContext *getLocationContext() const { return second; }
@@ -52,12 +57,43 @@ public:
   }
 };
 
+} // namespace ento
+} // namespace clang
+
+namespace llvm {
+template <> struct DenseMapInfo<clang::ento::EnvironmentEntry> {
+  static clang::ento::EnvironmentEntry getEmptyKey() {
+    return clang::ento::EnvironmentEntry();
+  }
+
+  static clang::ento::EnvironmentEntry getTombstoneKey() {
+    return clang::ento::EnvironmentEntry(
+        DenseMapInfo<clang::Stmt *>::getTombstoneKey(),
+        DenseMapInfo<clang::StackFrameContext *>::getTombstoneKey(), 3.14);
+  }
+
+  static unsigned getHashValue(const clang::ento::EnvironmentEntry &Val) {
+    return DenseMapInfo<clang::Stmt *>::getHashValue(Val.getStmt()) ^
+           DenseMapInfo<clang::LocationContext *>::getHashValue(
+               Val.getLocationContext());
+  }
+
+  static bool isEqual(const clang::ento::EnvironmentEntry &LHS,
+                      const clang::ento::EnvironmentEntry &RHS) {
+    return LHS == RHS;
+  }
+};
+} // namespace llvm
+
+namespace clang {
+namespace ento {
+
 /// An immutable map from EnvironemntEntries to SVals.
 class Environment {
 private:
   friend class EnvironmentManager;
 
-  using BindingsTy = llvm::ImmutableMap<EnvironmentEntry, SVal>;
+  using BindingsTy = llvm::DenseMap<EnvironmentEntry, SVal>;
 
   BindingsTy ExprBindings;
 
@@ -67,9 +103,10 @@ private:
 
 public:
   using iterator = BindingsTy::iterator;
+  using const_iterator = BindingsTy::const_iterator;
 
-  iterator begin() const { return ExprBindings.begin(); }
-  iterator end() const { return ExprBindings.end(); }
+  const_iterator begin() const { return ExprBindings.begin(); }
+  const_iterator end() const { return ExprBindings.end(); }
 
   /// Fetches the current binding of the expression in the
   /// Environment.
@@ -78,7 +115,7 @@ public:
   /// Profile - Profile the contents of an Environment object for use
   ///  in a FoldingSet.
   static void Profile(llvm::FoldingSetNodeID& ID, const Environment* env) {
-    env->ExprBindings.Profile(ID);
+    ID.AddPointer(&env->ExprBindings);
   }
 
   /// Profile - Used to profile the contents of this object for inclusion
@@ -98,12 +135,26 @@ public:
 
 class EnvironmentManager {
 private:
-  using FactoryTy = Environment::BindingsTy::Factory;
+  struct FactoryTy {
+    Environment getEmptyMap() { return Environment(Environment::BindingsTy()); }
+    Environment remove(const Environment::BindingsTy &EB,
+                       const EnvironmentEntry &E) {
+      Environment::BindingsTy Copy(EB);
+      Copy.erase(E);
+      return Copy;
+    }
+    Environment add(const Environment::BindingsTy &EB,
+                    const EnvironmentEntry &E, SVal V) {
+      Environment::BindingsTy Copy(EB);
+      Copy.insert({E, V});
+      return Copy;
+    }
+  };
 
   FactoryTy F;
 
 public:
-  EnvironmentManager(llvm::BumpPtrAllocator &Allocator) : F(Allocator) {}
+  EnvironmentManager(llvm::BumpPtrAllocator &) : F() {}
 
   Environment getInitialEnvironment() {
     return Environment(F.getEmptyMap());
