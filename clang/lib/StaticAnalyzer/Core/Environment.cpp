@@ -27,6 +27,7 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/SymbolManager.h"
 #include "llvm/ADT/ImmutableMap.h"
 #include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
@@ -34,6 +35,13 @@
 
 using namespace clang;
 using namespace ento;
+
+#define DEBUG_TYPE "Environment"
+STATISTIC(EnvRemove, "The # of removes from the Env");
+STATISTIC(EnvRemoveDead, "The # of calls to removeDeadBindings");
+STATISTIC(EnvAdd, "The # of additions to the Env");
+STATISTIC(EnvLookup, "The # of lookups to the Env");
+STATISTIC(EnvMaxSize, "The max size of Env");
 
 static const Expr *ignoreTransparentExprs(const Expr *E) {
   E = E->IgnoreParens();
@@ -75,6 +83,13 @@ EnvironmentEntry::EnvironmentEntry(const Stmt *S, const LocationContext *L)
                                              : nullptr) {}
 
 SVal Environment::lookupExpr(const EnvironmentEntry &E) const {
+  static int called = 0;
+  if (++called % 1 == 0) {
+    int i = 0;
+    for (Environment::iterator I = begin(), End = end(); I != End; ++I, ++i);
+    EnvMaxSize.updateMax(i);
+  }
+  EnvLookup++;
   const SVal* X = ExprBindings.lookup(E);
   if (X) {
     SVal V = *X;
@@ -138,11 +153,14 @@ Environment EnvironmentManager::bindExpr(Environment Env,
                                          SVal V,
                                          bool Invalidate) {
   if (V.isUnknown()) {
-    if (Invalidate)
+    if (Invalidate) {
+      EnvRemove++;
       return Environment(F.remove(Env.ExprBindings, E));
+    }
     else
       return Env;
   }
+  EnvAdd++;
   return Environment(F.add(Env.ExprBindings, E, V));
 }
 
@@ -178,6 +196,7 @@ Environment
 EnvironmentManager::removeDeadBindings(Environment Env,
                                        SymbolReaper &SymReaper,
                                        ProgramStateRef ST) {
+  EnvRemoveDead++;
   // We construct a new Environment object entirely, as this is cheaper than
   // individually removing all the subexpression bindings (which will greatly
   // outnumber block-level expression bindings).
@@ -200,6 +219,7 @@ EnvironmentManager::removeDeadBindings(Environment Env,
       continue;
 
     if (SymReaper.isLive(E, BlkExpr.getLocationContext())) {
+      EnvAdd++;
       // Copy the binding to the new map.
       EBMapRef = EBMapRef.add(BlkExpr, X);
 

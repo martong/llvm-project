@@ -19,11 +19,15 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/ExprEngine.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/ProgramStateTrait.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/ADT/Statistic.h"
 
 using namespace clang;
 using namespace ento;
 
 namespace clang { namespace  ento {
+#define DEBUG_TYPE "PorgramState"
+STATISTIC(NewEnvEq, "The # of NewEnv == Env");
+STATISTIC(NewEnvNEq, "The # of NewEnv != Env");
 /// Increments the number of times this state is referenced.
 
 void ProgramStateRetain(const ProgramState *state) {
@@ -310,11 +314,14 @@ ProgramStateRef ProgramState::BindExpr(const Stmt *S,
   Environment NewEnv =
     getStateManager().EnvMgr.bindExpr(Env, EnvironmentEntry(S, LCtx), V,
                                       Invalidate);
-  if (NewEnv == Env)
+  if (NewEnv == Env) {
+    ++NewEnvEq;
     return this;
+  }
 
   ProgramState NewSt = *this;
   NewSt.Env = NewEnv;
+  ++NewEnvNEq;
   return getStateManager().getPersistentState(NewSt);
 }
 
