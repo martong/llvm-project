@@ -290,8 +290,9 @@ public:
     return Root ? Root->contains(K) : false;
   }
 
-  ImmutableMap<KeyT, ValT> asImmutableMap() const {
-    return ImmutableMap<KeyT, ValT>(Factory->getCanonicalTree(Root.get()));
+  ImmutableMap<KeyT, ValT> asImmutableMap(bool Canonical = true) const {
+    return ImmutableMap<KeyT, ValT>(
+        Canonical ? Factory->getCanonicalTree(Root.get()) : Root.get());
   }
 
   bool operator==(const ImmutableMapRef &RHS) const {

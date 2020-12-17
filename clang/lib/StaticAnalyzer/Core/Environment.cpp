@@ -208,7 +208,7 @@ EnvironmentManager::removeDeadBindings(Environment Env,
     }
   }
 
-  NewEnv.ExprBindings = EBMapRef.asImmutableMap();
+  NewEnv.ExprBindings = EBMapRef.asImmutableMap(false);
   return NewEnv;
 }
 

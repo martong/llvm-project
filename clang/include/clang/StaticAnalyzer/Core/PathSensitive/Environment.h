@@ -103,7 +103,7 @@ private:
   FactoryTy F;
 
 public:
-  EnvironmentManager(llvm::BumpPtrAllocator &Allocator) : F(Allocator) {}
+  EnvironmentManager(llvm::BumpPtrAllocator &Allocator) : F(Allocator, false) {}
 
   Environment getInitialEnvironment() {
     return Environment(F.getEmptyMap());
