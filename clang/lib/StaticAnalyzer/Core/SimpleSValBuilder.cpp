@@ -1161,11 +1161,13 @@ SVal SimpleSValBuilder::evalBinOpLN(ProgramStateRef state,
       // Offset the increment by the pointer size.
       llvm::APSInt Multiplicand(rightI.getBitWidth(), /* isUnsigned */ true);
       QualType pointeeType = resultTy->getPointeeType();
-      Multiplicand = getContext().getTypeSizeInChars(pointeeType).getQuantity();
-      rightI *= Multiplicand;
+      if (!pointeeType.isNull()) {
+        Multiplicand =
+            getContext().getTypeSizeInChars(pointeeType).getQuantity();
+        rightI *= Multiplicand;
 
-      // Compute the adjusted pointer.
-      switch (op) {
+        // Compute the adjusted pointer.
+        switch (op) {
         case BO_Add:
           rightI = leftI + rightI;
           break;
@@ -1174,8 +1176,9 @@ SVal SimpleSValBuilder::evalBinOpLN(ProgramStateRef state,
           break;
         default:
           llvm_unreachable("Invalid pointer arithmetic operation");
+        }
+        return loc::ConcreteInt(getBasicValueFactory().getValue(rightI));
       }
-      return loc::ConcreteInt(getBasicValueFactory().getValue(rightI));
     }
   }
 
@@ -1189,7 +1192,8 @@ SVal SimpleSValBuilder::evalBinOpLN(ProgramStateRef state,
     QualType elementType;
 
     if (const ElementRegion *elemReg = dyn_cast<ElementRegion>(region)) {
-      assert(op == BO_Add || op == BO_Sub);
+      if(!(op == BO_Add || op == BO_Sub))
+        return UnknownVal();
       index = evalBinOpNN(state, op, elemReg->getIndex(), rhs,
                           getArrayIndexType());
       superR = cast<SubRegion>(elemReg->getSuperRegion());
@@ -1207,15 +1211,17 @@ SVal SimpleSValBuilder::evalBinOpLN(ProgramStateRef state,
         elementType = resultTy->getPointeeType();
     }
 
-    // Represent arithmetic on void pointers as arithmetic on char pointers.
-    // It is fine when a TypedValueRegion of char value type represents
-    // a void pointer. Note that arithmetic on void pointers is a GCC extension.
-    if (elementType->isVoidType())
-      elementType = getContext().CharTy;
+    if (!elementType.isNull()) {
+      // Represent arithmetic on void pointers as arithmetic on char pointers.
+      // It is fine when a TypedValueRegion of char value type represents
+      // a void pointer. Note that arithmetic on void pointers is a GCC extension.
+      if (elementType->isVoidType())
+        elementType = getContext().CharTy;
 
-    if (Optional<NonLoc> indexV = index.getAs<NonLoc>()) {
-      return loc::MemRegionVal(MemMgr.getElementRegion(elementType, *indexV,
-                                                       superR, getContext()));
+      if (Optional<NonLoc> indexV = index.getAs<NonLoc>()) {
+        return loc::MemRegionVal(MemMgr.getElementRegion(elementType, *indexV,
+                                                         superR, getContext()));
+      }
     }
   }
   return UnknownVal();

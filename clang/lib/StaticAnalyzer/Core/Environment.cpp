@@ -136,13 +136,9 @@ SVal Environment::getSVal(const EnvironmentEntry &Entry,
 Environment EnvironmentManager::bindExpr(Environment Env,
                                          const EnvironmentEntry &E,
                                          SVal V,
-                                         bool Invalidate) {
-  if (V.isUnknown()) {
-    if (Invalidate)
-      return Environment(F.remove(Env.ExprBindings, E));
-    else
-      return Env;
-  }
+                                         bool) { // FIXME remove
+  if (V.isUnknown())
+    return Env;
   return Environment(F.add(Env.ExprBindings, E, V));
 }
 
