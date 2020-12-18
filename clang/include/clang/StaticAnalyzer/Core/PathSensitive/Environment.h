@@ -57,19 +57,21 @@ class Environment {
 private:
   friend class EnvironmentManager;
 
-  using BindingsTy = llvm::ImmutableMap<EnvironmentEntry, SVal>;
+  using BindingsTy = std::vector<std::pair<EnvironmentEntry, SVal>>;
 
-  BindingsTy ExprBindings;
+  BindingsTy* ExprBindings = nullptr;
+  int Offset = -1;
 
-  Environment(BindingsTy eb) : ExprBindings(eb) {}
+  Environment(BindingsTy* eb, int Offset) : ExprBindings(eb), Offset(Offset) {}
 
   SVal lookupExpr(const EnvironmentEntry &E) const;
 
 public:
   using iterator = BindingsTy::iterator;
+  using const_iterator = BindingsTy::const_iterator;
 
-  iterator begin() const { return ExprBindings.begin(); }
-  iterator end() const { return ExprBindings.end(); }
+  const_iterator begin() const { return ExprBindings->begin(); }
+  const_iterator end() const { return ExprBindings->begin() + Offset; }
 
   /// Fetches the current binding of the expression in the
   /// Environment.
@@ -78,7 +80,9 @@ public:
   /// Profile - Profile the contents of an Environment object for use
   ///  in a FoldingSet.
   static void Profile(llvm::FoldingSetNodeID& ID, const Environment* env) {
-    env->ExprBindings.Profile(ID);
+    //env->ExprBindings.Profile(ID);
+    ID.AddPointer(&env->ExprBindings);
+    ID.AddInteger(env->Offset);
   }
 
   /// Profile - Used to profile the contents of this object for inclusion
@@ -94,16 +98,41 @@ public:
   void printJson(raw_ostream &Out, const ASTContext &Ctx,
                  const LocationContext *LCtx = nullptr, const char *NL = "\n",
                  unsigned int Space = 0, bool IsDot = false) const;
+
 };
 
 class EnvironmentManager {
 private:
-  using FactoryTy = Environment::BindingsTy::Factory;
+
+struct FactoryTy {
+  std::vector<std::unique_ptr<Environment::BindingsTy>> Bindings;
+  llvm::DenseSet<std::pair<Environment::BindingsTy*, int>> Refs;
+  Environment getEmptyMap() {
+    Bindings.emplace_back(std::make_unique<Environment::BindingsTy>());
+    auto E = Environment(Bindings.back().get(), 0);
+    //Refs.insert({Bindings.back().get(), 0});
+    return E;
+  }
+  Environment add(Environment Env,
+                  const EnvironmentEntry &E, SVal V) {
+
+    auto NewEnv = Environment(Env.ExprBindings, Env.Offset+1);
+    // Check for existing node
+    //if (Refs.count({NewEnv.ExprBindings, NewEnv.Offset})) { // count(NewEnv)
+      //Bindings.emplace_back(std::make_unique<Environment::BindingsTy>(Env.begin(), Env.end()));
+      //NewEnv = Environment(Bindings.back().get(), NewEnv.Offset);
+    //}
+
+    //Refs.insert({NewEnv.ExprBindings, NewEnv.Offset}); // insert(NewEnv)
+    NewEnv.ExprBindings->emplace_back(E, V);
+    return NewEnv;
+  }
+};
 
   FactoryTy F;
 
 public:
-  EnvironmentManager(llvm::BumpPtrAllocator &Allocator) : F(Allocator) {}
+  EnvironmentManager(llvm::BumpPtrAllocator &) : F() {}
 
   Environment getInitialEnvironment() {
     return Environment(F.getEmptyMap());

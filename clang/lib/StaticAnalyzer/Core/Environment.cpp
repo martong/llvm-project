@@ -75,10 +75,11 @@ EnvironmentEntry::EnvironmentEntry(const Stmt *S, const LocationContext *L)
                                              : nullptr) {}
 
 SVal Environment::lookupExpr(const EnvironmentEntry &E) const {
-  const SVal* X = ExprBindings.lookup(E);
-  if (X) {
-    SVal V = *X;
-    return V;
+  assert(0 <= Offset);
+  assert(Offset <= (int)ExprBindings->size());
+  for (auto It = begin(); It != end(); ++It) {
+    if (It->first == E)
+      return It->second;
   }
   return UnknownVal();
 }
@@ -139,7 +140,7 @@ Environment EnvironmentManager::bindExpr(Environment Env,
                                          bool) { // FIXME remove
   if (V.isUnknown())
     return Env;
-  return Environment(F.add(Env.ExprBindings, E, V));
+  return Environment(F.add(Env, E, V));
 }
 
 namespace {
@@ -182,14 +183,10 @@ EnvironmentManager::removeDeadBindings(Environment Env,
   MarkLiveCallback CB(SymReaper);
   ScanReachableSymbols RSScaner(ST, CB);
 
-  llvm::ImmutableMapRef<EnvironmentEntry, SVal>
-    EBMapRef(NewEnv.ExprBindings.getRootWithoutRetain(),
-             F.getTreeFactory());
-
   // Iterate over the block-expr bindings.
-  for (Environment::iterator I = Env.begin(), End = Env.end(); I != End; ++I) {
-    const EnvironmentEntry &BlkExpr = I.getKey();
-    const SVal &X = I.getData();
+  for (auto I = Env.begin(), End = Env.end(); I != End; ++I) {
+    const EnvironmentEntry &BlkExpr = I->first;
+    const SVal &X = I->second;
 
     const Expr *E = dyn_cast<Expr>(BlkExpr.getStmt());
     if (!E)
@@ -197,23 +194,23 @@ EnvironmentManager::removeDeadBindings(Environment Env,
 
     if (SymReaper.isLive(E, BlkExpr.getLocationContext())) {
       // Copy the binding to the new map.
-      EBMapRef = EBMapRef.add(BlkExpr, X);
+      F.add(NewEnv, BlkExpr, X);
 
       // Mark all symbols in the block expr's value live.
       RSScaner.scan(X);
     }
   }
 
-  NewEnv.ExprBindings = EBMapRef.asImmutableMap();
   return NewEnv;
 }
 
 void Environment::printJson(raw_ostream &Out, const ASTContext &Ctx,
                             const LocationContext *LCtx, const char *NL,
                             unsigned int Space, bool IsDot) const {
+  assert(false);
   Indent(Out, Space, IsDot) << "\"environment\": ";
 
-  if (ExprBindings.isEmpty()) {
+  if (Offset == 0) {
     Out << "null," << NL;
     return;
   }
@@ -245,9 +242,8 @@ void Environment::printJson(raw_ostream &Out, const ASTContext &Ctx,
     unsigned int InnerSpace = Space + 1;
 
     // Store the last ExprBinding which we will print.
-    BindingsTy::iterator LastI = ExprBindings.end();
-    for (BindingsTy::iterator I = ExprBindings.begin(); I != ExprBindings.end();
-         ++I) {
+    auto LastI = end();
+    for (auto I = begin(); I != end(); ++I) {
       if (I->first.getLocationContext() != LC)
         continue;
 
@@ -263,8 +259,7 @@ void Environment::printJson(raw_ostream &Out, const ASTContext &Ctx,
       LastI = I;
     }
 
-    for (BindingsTy::iterator I = ExprBindings.begin(); I != ExprBindings.end();
-         ++I) {
+    for (auto I = begin(); I != end(); ++I) {
       if (I->first.getLocationContext() != LC)
         continue;
 
