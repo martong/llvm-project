@@ -179,9 +179,10 @@ void ExprEngine::removeDeadOnEndOfFunction(NodeBuilderContext& BC,
   // is dead.
   SaveAndRestore<const NodeBuilderContext *> NodeContextRAII(currBldrCtx, &BC);
   const LocationContext *LCtx = Pred->getLocationContext();
-  removeDead(Pred, Dst, dyn_cast<ReturnStmt>(LastSt), LCtx,
-             LCtx->getAnalysisDeclContext()->getBody(),
-             ProgramPoint::PostStmtPurgeDeadSymbolsKind);
+  if (AMgr.options.AnalysisPurgeOpt != PurgeNone)
+    removeDead(Pred, Dst, dyn_cast<ReturnStmt>(LastSt), LCtx,
+               LCtx->getAnalysisDeclContext()->getBody(),
+               ProgramPoint::PostStmtPurgeDeadSymbolsKind);
 }
 
 static bool wasDifferentDeclUsedForInlining(CallEventRef<> Call,
