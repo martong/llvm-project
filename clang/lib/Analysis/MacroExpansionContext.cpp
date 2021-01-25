@@ -1,4 +1,4 @@
-//===- MacroExpansionContext.h - Macro expansion information ----*- C++ -*-===//
+//===- MacroExpansionContext.cpp - Macro expansion information --*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -29,6 +29,10 @@ public:
 
   void MacroExpands(const Token &MacroName, const MacroDefinition &MD,
                     SourceRange Range, const MacroArgs *Args) override {
+    // Ignore annotation tokens like: _Pragma("pack(push, 1)")
+    if (MacroName.getIdentifierInfo()->getName() == "_Pragma")
+      return;
+
     SourceLocation MacroNameBegin = SM.getExpansionLoc(MacroName.getLocation());
     assert(MacroNameBegin == SM.getExpansionLoc(Range.getBegin()));
 
@@ -169,6 +173,12 @@ void MacroExpansionContext::dumpExpandedTextsToStream(raw_ostream &OS) const {
 }
 
 static void dumpTokenInto(const Preprocessor &PP, raw_ostream &OS, Token Tok) {
+  assert(Tok.isNot(tok::raw_identifier));
+
+  // Ignore annotation tokens like: _Pragma("pack(push, 1)")
+  if (Tok.isAnnotation())
+    return;
+
   if (IdentifierInfo *II = Tok.getIdentifierInfo()) {
     // FIXME: For now, we don't respect whitespaces between macro expanded
     // tokens. We just emit a space after every identifier to produce a valid
