@@ -90,7 +90,46 @@ protected:
         SourceMgr.translateLineCol(SourceMgr.getMainFileID(), row, col);
     return SourceMgr.getExpansionLoc(Loc);
   }
+
+  static std::string dumpExpandedTexts(const MacroExpansionContext &Ctx) {
+    std::string Buf;
+    llvm::raw_string_ostream OS{Buf};
+    Ctx.dumpExpandedTextsToStream(OS);
+    return OS.str();
+  }
+
+  static std::string dumpExpansionRanges(const MacroExpansionContext &Ctx) {
+    std::string Buf;
+    llvm::raw_string_ostream OS{Buf};
+    Ctx.dumpExpansionRangesToStream(OS);
+    return OS.str();
+  }
 };
+
+TEST_F(MacroExpansionContextTest, IgnoresPragmas) {
+  // No-crash during lexing.
+  const auto Ctx = getMacroExpansionContextFor(R"code(
+  _Pragma("pack(push, 1)")
+  _Pragma("pack(pop, 1)")
+      )code");
+  // After preprocessing:
+  // #pragma pack(push, 1)
+  // #pragma pack(pop, 1)
+
+  EXPECT_EQ("\n=============== ExpandedTokens ===============\n",
+            dumpExpandedTexts(*Ctx));
+  EXPECT_EQ("\n=============== ExpansionRanges ===============\n",
+            dumpExpansionRanges(*Ctx));
+
+  EXPECT_FALSE(Ctx->getExpandedText(at(2, 1)).hasValue());
+  EXPECT_FALSE(Ctx->getOriginalText(at(2, 1)).hasValue());
+
+  EXPECT_FALSE(Ctx->getExpandedText(at(2, 3)).hasValue());
+  EXPECT_FALSE(Ctx->getOriginalText(at(2, 3)).hasValue());
+
+  EXPECT_FALSE(Ctx->getExpandedText(at(3, 3)).hasValue());
+  EXPECT_FALSE(Ctx->getOriginalText(at(3, 3)).hasValue());
+}
 
 TEST_F(MacroExpansionContextTest, NoneForNonExpansionLocations) {
   const auto Ctx = getMacroExpansionContextFor(R"code(
