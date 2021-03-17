@@ -75,12 +75,10 @@ EnvironmentEntry::EnvironmentEntry(const Stmt *S, const LocationContext *L)
                                              : nullptr) {}
 
 SVal Environment::lookupExpr(const EnvironmentEntry &E) const {
-  const SVal* X = ExprBindings.lookup(E);
-  if (X) {
-    SVal V = *X;
-    return V;
-  }
-  return UnknownVal();
+  const SVal *const Val = ExprBindings.find(E);
+  if (!Val)
+    return UnknownVal();
+  return *Val;
 }
 
 SVal Environment::getSVal(const EnvironmentEntry &Entry,
@@ -139,11 +137,10 @@ Environment EnvironmentManager::bindExpr(Environment Env,
                                          bool Invalidate) {
   if (V.isUnknown()) {
     if (Invalidate)
-      return Environment(F.remove(Env.ExprBindings, E));
-    else
-      return Env;
+      return F.remove(Env.ExprBindings, E);
+    return Env;
   }
-  return Environment(F.add(Env.ExprBindings, E, V));
+  return F.add(Env.ExprBindings, E, V);
 }
 
 namespace {
@@ -182,18 +179,16 @@ EnvironmentManager::removeDeadBindings(Environment Env,
   // individually removing all the subexpression bindings (which will greatly
   // outnumber block-level expression bindings).
   Environment NewEnv = getInitialEnvironment();
+  //auto NewBindings = NewEnv.ExprBindings.transient();
+  auto NewBindings = NewEnv.ExprBindings;
 
   MarkLiveCallback CB(SymReaper);
   ScanReachableSymbols RSScaner(ST, CB);
 
-  llvm::ImmutableMapRef<EnvironmentEntry, SVal>
-    EBMapRef(NewEnv.ExprBindings.getRootWithoutRetain(),
-             F.getTreeFactory());
-
   // Iterate over the block-expr bindings.
-  for (Environment::iterator I = Env.begin(), End = Env.end(); I != End; ++I) {
-    const EnvironmentEntry &BlkExpr = I.getKey();
-    const SVal &X = I.getData();
+  for (auto I = Env.begin(), End = Env.end(); I != End; ++I) {
+    const EnvironmentEntry &BlkExpr = I->first;
+    const SVal &X = I->second;
 
     const Expr *E = dyn_cast<Expr>(BlkExpr.getStmt());
     if (!E)
@@ -201,15 +196,15 @@ EnvironmentManager::removeDeadBindings(Environment Env,
 
     if (SymReaper.isLive(E, BlkExpr.getLocationContext())) {
       // Copy the binding to the new map.
-      EBMapRef = EBMapRef.add(BlkExpr, X);
+      NewBindings = NewBindings.insert({BlkExpr, X});
 
       // Mark all symbols in the block expr's value live.
       RSScaner.scan(X);
     }
   }
 
-  NewEnv.ExprBindings = EBMapRef.asImmutableMap();
-  return NewEnv;
+  //return Environment(NewBindings.persistent());
+  return Environment(NewBindings);
 }
 
 void Environment::printJson(raw_ostream &Out, const ASTContext &Ctx,
@@ -217,7 +212,7 @@ void Environment::printJson(raw_ostream &Out, const ASTContext &Ctx,
                             unsigned int Space, bool IsDot) const {
   Indent(Out, Space, IsDot) << "\"environment\": ";
 
-  if (ExprBindings.isEmpty()) {
+  if (ExprBindings.empty()) {
     Out << "null," << NL;
     return;
   }

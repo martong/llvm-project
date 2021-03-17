@@ -17,6 +17,7 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/ProgramState_Fwd.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/SVals.h"
 #include "llvm/ADT/ImmutableMap.h"
+#include "immer/map.hpp"
 #include <utility>
 
 namespace clang {
@@ -52,12 +53,30 @@ public:
   }
 };
 
+} // namespace ento
+} // namespace clang
+
+namespace std {
+template <> struct hash<clang::ento::EnvironmentEntry> {
+  std::size_t
+  operator()(clang::ento::EnvironmentEntry const &EE) const noexcept {
+    std::size_t h1 = std::hash<const clang::Stmt *>{}(EE.getStmt());
+    std::size_t h2 =
+        std::hash<const clang::LocationContext *>{}(EE.getLocationContext());
+    return h1 ^ (h2 << 1); // or use boost::hash_combine
+  }
+};
+} // namespace std
+
+namespace clang {
+namespace ento {
+
 /// An immutable map from EnvironemntEntries to SVals.
 class Environment {
 private:
   friend class EnvironmentManager;
 
-  using BindingsTy = llvm::ImmutableMap<EnvironmentEntry, SVal>;
+  using BindingsTy = immer::map<EnvironmentEntry, SVal>;
 
   BindingsTy ExprBindings;
 
@@ -77,14 +96,23 @@ public:
 
   /// Profile - Profile the contents of an Environment object for use
   ///  in a FoldingSet.
-  static void Profile(llvm::FoldingSetNodeID& ID, const Environment* env) {
-    env->ExprBindings.Profile(ID);
-  }
+  //static void Profile(llvm::FoldingSetNodeID& ID, const Environment* env) {
+    //env->ExprBindings.Profile(ID);
+  //}
 
   /// Profile - Used to profile the contents of this object for inclusion
   ///  in a FoldingSet.
   void Profile(llvm::FoldingSetNodeID& ID) const {
-    Profile(ID, this);
+    //ID.AddInteger(ExprBindings.impl().size);
+    //ID.AddInteger(ExprBindings.impl().shift);
+    //ID.AddPointer(ExprBindings.impl().root);
+    //ID.AddPointer(ExprBindings.impl().tail);
+    //if (!ExprBindings.empty())
+      //ID.AddPointer(ExprBindings.back().first.getStmt());
+    for (const auto& P: ExprBindings) {
+      P.first.Profile(ID);
+      P.second.Profile(ID);
+    }
   }
 
   bool operator==(const Environment& RHS) const {
@@ -98,12 +126,27 @@ public:
 
 class EnvironmentManager {
 private:
-  using FactoryTy = Environment::BindingsTy::Factory;
+  //using FactoryTy = Environment::BindingsTy::Factory;
+  struct FactoryTy {
+    Environment::BindingsTy env;
+    Environment getEmptyMap() {
+      return Environment::BindingsTy();
+    }
+    Environment add(const Environment& Env,
+                    const EnvironmentEntry &E, SVal V) {
+
+      return Env.ExprBindings.insert({E, V});
+    }
+    Environment remove(const Environment& Env,
+                    const EnvironmentEntry &E) {
+      return Env.ExprBindings.erase(E);
+    }
+  };
 
   FactoryTy F;
 
 public:
-  EnvironmentManager(llvm::BumpPtrAllocator &Allocator) : F(Allocator) {}
+  EnvironmentManager(llvm::BumpPtrAllocator &) : F() {}
 
   Environment getInitialEnvironment() {
     return Environment(F.getEmptyMap());
