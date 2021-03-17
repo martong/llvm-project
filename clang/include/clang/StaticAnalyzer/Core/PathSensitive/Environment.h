@@ -18,6 +18,7 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/SVals.h"
 #include "llvm/ADT/ImmutableMap.h"
 #include "immer/map.hpp"
+#include "immer/algorithm.hpp"
 #include <utility>
 
 namespace clang {
@@ -103,16 +104,23 @@ public:
   /// Profile - Used to profile the contents of this object for inclusion
   ///  in a FoldingSet.
   void Profile(llvm::FoldingSetNodeID& ID) const {
-    //ID.AddInteger(ExprBindings.impl().size);
-    //ID.AddInteger(ExprBindings.impl().shift);
-    //ID.AddPointer(ExprBindings.impl().root);
-    //ID.AddPointer(ExprBindings.impl().tail);
-    //if (!ExprBindings.empty())
-      //ID.AddPointer(ExprBindings.back().first.getStmt());
-    for (const auto& P: ExprBindings) {
-      P.first.Profile(ID);
-      P.second.Profile(ID);
-    }
+
+    // loop-unrolling.cp:352
+    //   clang_analyzer_numTimesReached reports 12 instead of 8
+    ID.AddInteger(ExprBindings.impl().size);
+    ID.AddPointer(ExprBindings.impl().root);
+
+    // loop-unrolling.cp:352
+    //   clang_analyzer_numTimesReached reports 12 instead of 8 even with chunks
+    //immer::for_each_chunk(ExprBindings, [&ID](const auto *B, const auto *E) {
+      //ID.AddPointer(B);
+      //ID.AddPointer(E);
+    //});
+
+    //for (const auto& P: ExprBindings) {
+      //P.first.Profile(ID);
+      //P.second.Profile(ID);
+    //}
   }
 
   bool operator==(const Environment& RHS) const {
