@@ -349,7 +349,7 @@ int simple_unknown_bound_loop() {
 #ifdef DFS
     clang_analyzer_numTimesReached(); // expected-warning {{16}}
 #else
-    clang_analyzer_numTimesReached(); // expected-warning {{8}}
+    clang_analyzer_numTimesReached(); // expected-warning {{12}}
 #endif
   }
   return 0;
