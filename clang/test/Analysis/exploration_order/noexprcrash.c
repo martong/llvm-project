@@ -9,7 +9,8 @@ int c(b* input) {
     if (input->a) {
       // FIXME: The value should actually be "TRUE",
       // but is incorrect due to a bug.
-      clang_analyzer_eval(x); // expected-warning{{FALSE}}
+      clang_analyzer_eval(x); // expected-warning{{TRUE}} \
+                              // expected-warning{{FALSE}}
     } else {
       clang_analyzer_eval(x); // expected-warning{{TRUE}}
     }

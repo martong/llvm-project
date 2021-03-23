@@ -135,11 +135,8 @@ Environment EnvironmentManager::bindExpr(Environment Env,
                                          const EnvironmentEntry &E,
                                          SVal V,
                                          bool Invalidate) {
-  if (V.isUnknown()) {
-    if (Invalidate)
-      return F.remove(Env.ExprBindings, E);
+  if (V.isUnknown() && !Invalidate)
     return Env;
-  }
   return F.add(Env.ExprBindings, E, V);
 }
 
