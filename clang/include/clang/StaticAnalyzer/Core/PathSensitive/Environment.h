@@ -112,10 +112,10 @@ public:
 
     // loop-unrolling.cp:352
     //   clang_analyzer_numTimesReached reports 12 instead of 8 even with chunks
-    //immer::for_each_chunk(ExprBindings, [&ID](const auto *B, const auto *E) {
-      //ID.AddPointer(B);
-      //ID.AddPointer(E);
-    //});
+    immer::for_each_chunk(ExprBindings, [&ID](const auto *B, const auto *E) {
+      ID.AddPointer(B);
+      ID.AddPointer(E);
+    });
 
     //for (const auto& P: ExprBindings) {
       //P.first.Profile(ID);
