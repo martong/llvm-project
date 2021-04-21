@@ -1,3 +1,5 @@
+add_subdirectory(ericsson)
+
 set(LLVM_LINK_COMPONENTS
   FrontendOpenMP
   Support

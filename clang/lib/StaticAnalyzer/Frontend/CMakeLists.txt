@@ -22,6 +22,7 @@ add_clang_library(clangStaticAnalyzerFrontend
   clangFrontend
   clangLex
   clangStaticAnalyzerCheckers
+  clangStaticAnalyzerEricssonCheckers
   clangStaticAnalyzerCore
 
   DEPENDS

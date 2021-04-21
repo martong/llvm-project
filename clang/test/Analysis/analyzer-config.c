@@ -7,6 +7,10 @@
 // CHECK-NEXT: alpha.clone.CloneChecker:IgnoredFilesPattern = ""
 // CHECK-NEXT: alpha.clone.CloneChecker:MinimumCloneComplexity = 50
 // CHECK-NEXT: alpha.clone.CloneChecker:ReportNormalClones = true
+// CHECK-NEXT: alpha.ericsson.MemsizeParamOverload:AnyTypedefType = false
+// CHECK-NEXT: alpha.ericsson.cpp.DirtyScalar:CriticalOnly = true
+// CHECK-NEXT: alpha.ericsson.cpp.IteratorOutOfRange:AggressiveEraseModeling = false
+// CHECK-NEXT: alpha.ericsson.statisticsbased:APIMetadataPath = ""
 // CHECK-NEXT: alpha.osx.cocoa.DirectIvarAssignment:AnnotatedFunctions = false
 // CHECK-NEXT: alpha.security.MmapWriteExec:MmapProtExec = 0x04
 // CHECK-NEXT: alpha.security.MmapWriteExec:MmapProtRead = 0x01
@@ -75,6 +79,8 @@
 // CHECK-NEXT: display-ctu-progress = false
 // CHECK-NEXT: eagerly-assume = true
 // CHECK-NEXT: elide-constructors = true
+// CHECK-NEXT: ericsson.cpp.style.LargeObjectPassed:SizeThreshold = 1024
+// CHECK-NEXT: ericsson.cpp.style.MissingConst:CheckValueParams = false
 // CHECK-NEXT: expand-macros = false
 // CHECK-NEXT: experimental-enable-naive-ctu-analysis = false
 // CHECK-NEXT: exploration_strategy = unexplored_first_queue

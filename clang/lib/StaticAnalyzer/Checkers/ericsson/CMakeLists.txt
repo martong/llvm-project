@@ -1,0 +1,74 @@
+include_directories( include/ )
+
+set(LLVM_LINK_COMPONENTS
+  FrontendOpenMP
+  Support
+  )
+
+add_clang_library(clangStaticAnalyzerEricssonCheckers
+  lib/CppHelpers.cpp
+  lib/BugReporterHelper.cpp
+  lib/CheckerUtils/Common.cpp
+  lib/CheckerUtils/Buffer.cpp
+  lib/CheckerUtils/Tracking.cpp
+  lib/CheckerUtils/Symbols.cpp
+  lib/CheckerUtils/VisitorBase.cpp
+  lib/Matchers/Generic.cpp
+  lib/Matchers/STL.cpp
+  lib/Matchers/Debug.cpp
+  lib/Templates/ASTCheckers.cpp
+  checkers/AllocWithStateChecker.cpp
+  checkers/AssignmentInConditionChecker.cpp
+  checkers/BinFunctorTypeMismatchChecker.cpp
+  checkers/BitwiseShiftChecker.cpp
+  checkers/ContainerOfAutoptrChecker.cpp
+  checkers/DirtyScalarChecker.cpp
+  checkers/ExternalArrayWithUnknownSizeChecker.cpp
+  checkers/FunctionsWithNoParamChecker.cpp
+  checkers/InvariablePtrBranchChecker.cpp
+  checkers/IteratorChecker.cpp
+  checkers/LargeObjectPassedChecker.cpp
+  checkers/MemsizeParamOverloadChecker.cpp
+  checkers/MissingConstChecker.cpp
+  checkers/MisuseEnumAsConditionChecker.cpp
+  checkers/NegativeArrayIndexChecker.cpp
+  checkers/NonPortableUnionChecker.cpp
+  checkers/OStreamFormatChecker.cpp
+  checkers/PointerDeclChecker.cpp
+  checkers/PolymorphContainerChecker.cpp
+  checkers/PredWithStateChecker.cpp
+  checkers/RaiiMisuseChecker.cpp
+  checkers/ReduceScopeChecker.cpp
+  checkers/ReturnValueCheckStatisticsCollector.cpp
+  checkers/SpecialReturnValueChecker.cpp
+  checkers/SpecialReturnValueStatisticsCollector.cpp
+  checkers/SplitCriticalSectionsChecker.cpp
+  checkers/SufficientSizeArrayIndexingChecker.cpp
+  checkers/SwitchDefaultBranchChecker.cpp
+  checkers/UnaryFunctorTypeMismatchChecker.cpp
+  checkers/UncheckedReturnValueChecker.cpp
+  checkers/TSP/DbnTransactionManagementChecker.cpp
+  checkers/TSP/TspBuiltinTypesChecker.cpp
+  checkers/MTAS/DbnDelayAfterRetryChecker.cpp
+  checkers/MTAS/DialogueSetupCreateChecker.cpp
+  checkers/MTAS/EpctParametersChecker.cpp
+  checkers/MTAS/IllegalTracingChecker.cpp
+  checkers/MTAS/LicenseManagementChecker.cpp
+  checkers/MTAS/MtasConventionsChecker.cpp
+  checkers/MTAS/SerializeVersionChecker.cpp
+  checkers/MTAS/SerializeWithoutObserverChecker.cpp
+
+  LINK_LIBS
+  clangAST
+  clangASTMatchers
+  clangAnalysis
+  clangBasic
+  clangFrontend
+  clangIndex
+  clangLex
+  clangStaticAnalyzerCheckers
+  clangStaticAnalyzerCore
+
+  DEPENDS
+  omp_gen
+  )

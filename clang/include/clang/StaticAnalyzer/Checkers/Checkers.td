@@ -1673,3 +1673,6 @@ def UncountedLocalVarsChecker : Checker<"UncountedLocalVarsChecker">,
   Documentation<HasDocumentation>;
 
 } // end alpha.webkit
+
+include "EricssonCheckers.td"
+
