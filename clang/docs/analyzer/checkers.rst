@@ -2074,10 +2074,10 @@ Finds calls to the ``putenv`` function which pass a pointer to an automatic vari
     if (retval < 0 || (size_t)retval >= sizeof(env)) {
         /* Handle error */
     }
- 
+
     return putenv(env); // putenv function should not be called with auto variables
   }
-  
+
 .. _alpha-security-ArrayBound:
 
 alpha.security.ArrayBound (C)
@@ -2588,6 +2588,1383 @@ We don't warn about these cases - we don't consider them necessarily safe but si
 - variable defined in init statement condition of a ```for``` statement
 
 For the time being we also don't warn about uninitialized uncounted local variables.
+
+.. _ericsson-checkers:
+
+Ericsson Checkers
+-----------------
+
+The checkers are organized into packages. For example, the
+**ericsson.cpp11** package will contain checkers and sub-packages relating
+to C++11.
+
+The *Style* subpackages contain checkers whose warnings are not
+critical and will probably not lead to a runtime error, but instead
+represent inefficiencies or inconsistencies in the user code. Also,
+these checkers may be more prone to emit false-positives.
+
+ericsson
+^^^^^^^^
+
+.. _ericsson-cpp-InvalidatedIteratorAccess:
+
+ericsson.cpp.InvalidatedIteratorAccess
+""""""""""""""""""""""""""""""""""""""
+
+Find any kind of access of an invalidated iterator. Invalidation rules are
+based on the STL containers:
+
+- Container with subscript operator, front and back modifiers: ``std::deque``
+- Container with subscript operator, only back modifiers: ``std::vector``
+- Container without subscript operator, front and back modifiers: ``std::list``
+- Container without subscript operator, only back modifiers: ``std::forward_list``
+
+The checker uses the conservative approach: it disregards cases when all
+iterators may be invalidated due to reallocation (``std::deque`` and ``std::vector``).
+
+**Example**
+
+.. code-block:: cpp
+
+ void bad_erase(std::list<int> ls, int n) {
+   for (auto i = ls.begin(); i != ls.end(); ++i)
+     if (*i == n)
+       ls.erase(i); // Here i becomes invalidated, ++i is undefined behavior
+ }
+
+**Solution**
+
+Check the invalidation rules of STL containers in the C++ standard and avoid
+cases where invalidated operators are accessed.
+
+.. _ericsson-cpp-MisuseEnumAsCondition:
+
+ericsson.cpp.MisuseEnumAsCondition
+""""""""""""""""""""""""""""""""""
+
+Finds defects where you use enum types as boolean.
+Except when enum has exactly 2 constant and one of them is 0.
+
+**Examples**
+
+.. code-block:: cpp
+
+ enum abc { A, B, C }
+ abc a;
+ if (a) // warn
+
+ enum xy { X, Y }
+ xy b;
+ if (b) // good
+
+**Solution**
+
+Do not use enums as boolean.
+
+.. _ericsson-cpp-PredWithState:
+
+ericsson.cpp.PredWithState
+""""""""""""""""""""""""""
+
+Functors used as predicates should not have states, because the writer of the
+functor have no control over when and how many times will the functor be copied.
+
+.. code-block:: cpp
+
+ class MyPredFunktor{
+
+     int _myState;
+     int count;
+
+ public:
+     MyPredFunktor(int initState): _myState(initState), count(0){};
+
+     ~MyPredFunktor(){};
+
+     bool operator() (int number) {
+         ++count;
+         return (number + _myState) % 2;
+     }
+ };
+
+**Solution**
+
+Try to use stateless predicates whenever possible. In case a predicate is
+using member variables, mark them const.
+
+.. code-block:: cpp
+
+ class MyStatelessPredFunktor{
+     const int count;
+
+ public:
+     MyStatelessPredFunktor(int count) : count(count) {};
+     ~MyStatelessPredFunktor(){};
+
+     bool operator() (int number) {
+         return number % count;
+     }
+ };
+
+.. _ericsson-cpp-RaiiMisuse:
+
+ericsson.cpp.RaiiMisuse
+"""""""""""""""""""""""
+
+This checker detects when the object constructor of a user class allocates
+resources that are not freed by the class destructor. In well-designed code, the
+owner of a resource is usually the one who allocated it, and therefore it is his
+responsibility to free it. Only resources bound to member fields are considered.
+
+This checker will only check classes that are constructed on any code path. If a
+class is never instantiated, no warning will be raised in relation to it.
+
+**Example**
+
+.. code-block:: cpp
+
+ struct Foo
+ {
+   int* x;
+   char* y;
+
+   Foo() : x(new int(5)), y(new char('A'))
+   {
+
+   }
+
+   ~Foo()
+   {
+     delete x;
+   }
+ };
+
+``Foo::y`` is not ``delete``-ed by the ``Foo`` destructor.
+
+**Solution**
+
+Make sure that every allocation in the constructor has the corresponding pair of
+deallocation in the destructor.
+
+**Limitations**
+
+As already mentioned, this checker only takes the class constructors and the
+destructor into consideration. It does not attempt to detect early deallocations
+or ownership transfers, and therefore may be prone to false-positives.
+
+Furthermore, this checker currently only handles the following types of
+resources:
+
+- Singleton heap allocation (``new`` / ``delete``)
+- Array heap allocation (``new[]`` / ``delete[]``)
+
+**Other Notes**
+
+The current implementation of the checker will also raise a warning when a
+resource allocator and deallocator mismatch: for example, a heap object is
+allocated using ``new[]`` but is freed using ``delete``.
+
+.. _ericsson-cpp-stl-ContainerOfAutoptr:
+
+ericsson.cpp.stl.ContainerOfAutoptr
+"""""""""""""""""""""""""""""""""""
+
+Finds instances when an STL container with ``std::auto_ptr<T>`` items is used.
+Using containers of ``std::auto_ptr<T>`` is dangerous, because their copy
+constructor is destructing, as it nulls the source pointer (i.e. it behaves as a
+C++11 move constructor). This means that STL algorithms like ``std::sort`` will
+potentially invalidate (null out) some or all of the pointers.
+
+**Example**
+
+.. code-block:: cpp
+
+ std::vector<std::auto_ptr<int>> v; // (1)
+
+ template<typename T> class wrapper {};
+
+ wrapper<std::set<std::auto_ptr<int>>> w; // (2)
+
+This checker will look for such containers even within template arguments of a
+type, as shown above, and will also handle type aliases.
+
+**Solution**
+
+Consider using C++11 smart pointers like ``std::unique_ptr`` or storing raw
+pointers.
+
+.. code-block:: cpp
+
+ std::vector<std::unique_ptr<int>> v;
+
+.. _ericsson-cpp-stl-PolymorphContainer:
+
+ericsson.cpp.stl.PolymorphContainer
+"""""""""""""""""""""""""""""""""""
+
+STL containers do not have virtual destructors. They are not intended to be used
+in a polimorphic way.
+
+**Example**
+
+.. code-block:: cpp
+
+ class myIntContainer : public std::vector<int> {};
+
+ int main(){
+     std::vector<int>* myVector = new myIntContainer;
+     delete myVector;
+ }
+
+**Solution**
+
+Avoid the use of STL containers in a polymorphic way.
+
+.. _ericsson-cpp-style-LargeObjectPassed:
+
+ericsson.cpp.style.LargeObjectPassed
+""""""""""""""""""""""""""""""""""""
+
+This checker aims to detect when large objects are passed by value as function
+arguments. The default size treshold is **128** bytes.
+In the config file the threshold size should be given in **bits**.
+
+**Example**
+
+.. code-block:: cpp
+
+ struct Foo
+ {
+   char buffer[150];
+ };
+
+ void bar(Foo f) {}
+
+ int main(int argc, const char** argv)
+ {
+   Foo f;
+   bar(f); // warning
+
+   return 0;
+ }
+
+**Solution**
+
+Pass large objects as (const) reference.
+
+.. _ericsson-cpp-style-MissingConst:
+
+ericsson.cpp.style.MissingConst
+"""""""""""""""""""""""""""""""
+
+Check if a method or a variable could be declared as const. This checker is very
+slow right now, it is not advised to turn it on unless you really want to focus
+on const correctness.
+
+.. _ericsson-cpp-style-ReduceScope:
+
+ericsson.cpp.style.ReduceScope
+""""""""""""""""""""""""""""""
+
+It warns, when a variable could be declared in a smaller scope.
+
+**Example**
+
+.. code-block:: cpp
+
+ void f () {
+     int a;
+
+     if (bar())
+     {
+         int b;
+         a = 2;
+         b = 0;
+     }
+ }
+
+**Solution**
+
+Reduce the scope of the variable.
+
+.. code-block:: cpp
+
+ void f () {
+     if (bar())
+     {
+         int b;
+         int a;
+         a = 2;
+         b = 0;
+     }
+ }
+
+.. _ericsson-linuxkernelstyle-PointerDecl:
+
+ericsson.linuxkernelstyle.PointerDecl
+"""""""""""""""""""""""""""""""""""""
+
+The * charcter in pointer declarations, or in function declarations returning
+pointer type should be written adjacent to the pointer or function name and not
+adjacent to the type name.
+
+This rule can be justified by the following example.
+
+**Example**
+
+.. code-block:: cpp
+
+ int *a,*b;//correct
+ int* c,d;//incorrect
+
+Here ``a``,``b`` and ``c`` is of pointer type, while ``d`` is not, however
+``int* c,d`` suggests ``d`` is also of pointer type.
+
+**Solution**
+
+Write ``*`` adjacent to the pointer or function name.
+
+.. _ericsson-misrac-AssignmentInCondition:
+
+ericsson.misrac.AssignmentInCondition
+"""""""""""""""""""""""""""""""""""""
+
+Detects MISRA-C 13.1 rule violations:
+
+Assignment operator shall not be used in a condition. A condition is the
+condition expression of an ``if``, ``for``, ``do``, ``while``, or
+conditional operator (``?:``) statement.
+
+**Example**
+
+.. code-block:: cpp
+
+ /* GOOD */
+ a = b;
+ if (a == 10) {
+ }
+
+ /* BAD */
+ if ((a = b) == 10) {
+ }
+
+ /* BAD */
+ if (a = b) {
+ }
+
+.. _ericsson-misrac-ExternalArrayWithUnknownSize:
+
+ericsson.misrac.ExternalArrayWithUnknownSize
+""""""""""""""""""""""""""""""""""""""""""""
+
+Detects MISRA-C 8.12 rule violations:
+
+The size of an external array should always be stated explicitly.
+
+**Example**
+
+.. code-block:: cpp
+
+ extern int array1[10];  /* Compliant */
+
+ extern int array2[];    /* Not compliant */
+
+
+**Solution**
+
+Give the size of the array explicitly or implicitly by initialization.
+
+.. _ericsson-misrac-FunctionWithNoParam:
+
+ericsson.misrac.FunctionWithNoParam
+"""""""""""""""""""""""""""""""""""
+
+Detects MISRA-C 16.5 rule violations:
+
+Functions with no parameters shall be declared and defined with void parameter
+list.
+
+**Example**
+
+.. code-block:: cpp
+
+ /* GOOD */
+ void func(void);
+
+ /* GOOD */
+ void func(void){}
+
+
+ /* BAD */
+ void func();
+
+ /* BAD */
+ void func(){}
+
+.. _ericsson-misrac-SwitchDefaultBranch:
+
+ericsson.misrac.SwitchDefaultBranch
+"""""""""""""""""""""""""""""""""""
+
+Detects usages of switch statements which does not have a default branch.
+Default branch should always be added as the final clause according to defensive
+programming principles.
+
+**Example**
+
+.. code-block:: cpp
+
+ switch(c){
+   case 1:
+     a++;
+     break;
+   case 2:
+     a=1;
+     break;
+ }
+
+**Solution**
+
+Add default branch to the switch statement.
+
+.. _ericsson-precpp11-stl-AllocWithState:
+
+ericsson.precpp11.stl.AllocWithState
+""""""""""""""""""""""""""""""""""""
+
+Detects usages of stateful allocators. In C++98 the allocators should be
+stateless. In C++11 the allocators can maintain state.
+
+**Example**
+
+.. code-block:: cpp
+
+ template<typename T>
+ class MyAlloc
+ {
+     int state;
+
+     // ...
+ };
+
+ std::vector<int, MyAlloc<int>> v2; // (1)
+ std::map<int, float, std::less<int>, MyAlloc<std::pair<const int, float>>> m; // (2)
+ std::basic_string<char, std::char_traits<char>, MyAlloc<char>> s; // (3)
+
+This checker will check types used as the allocator template argument
+when instantiating variables of STL container types. It will check if
+the given type contains any fields, and will raise a warning when so.
+The checker will look through any sugar when finding the definition of
+the allocator type, i.e. it can handle ``using`` and ``typedef``
+declarations.
+
+**Solution**
+
+Make the allocators stateless.
+
+.. _ericsson-precpp11-stl-BinFunctorTypeMismatch:
+
+ericsson.precpp11.stl.BinFunctorTypeMismatch
+""""""""""""""""""""""""""""""""""""""""""""
+
+Detects type mismatches when implementing an ``std::binary_function``.
+When deriving from this class, you have to specify the argument types and the
+return type of the functor twice: once for the template arguments of
+``std::binary_function``, and again when declaring (and defining)
+``operator()``. Providing mismatched types can result in incorrect behavior when
+supplying the defined functor as argument to e.g. an STL algorithm.
+
+**Example**
+
+.. code-block:: cpp
+
+ struct C : std::binary_function<int, long, char>
+ {
+     char operator()(int, long);
+ };
+ struct C2 : std::binary_function<int, char, bool>
+ {
+     bool operator()(bool, char);
+ };
+
+ template<typename T>
+ struct CT : std::binary_function<T, int, bool>
+ {
+     bool operator()(T, int);
+ };
+
+Note that the last template argument for ``std::binary_function`` specifies the
+return type of the functor.
+
+**Solution**
+
+Match the types of the template parameter with the parameters and return type of
+the function call operator of the given functor.
+
+**Notes**
+
+``std::binary_function`` is deprecated in the C++11 standard.
+
+.. _ericsson-precpp11-stl-UnaryFunctorTypeMismatch:
+
+ericsson.precpp11.stl.UnaryFunctorTypeMismatch
+""""""""""""""""""""""""""""""""""""""""""""""
+
+Detects type mismatches when implementing an ``std::unary_function``. When
+deriving from this class, you have to specify the argument type and the return
+type of the functor twice: once for the template arguments of
+``std::unary_function``, and again when declaring (and defining) ``operator()``.
+Providing mismatched types can result in incorrect behavior when supplying the
+defined functor as argument to e.g. an STL algorithm.
+
+**Example**
+
+.. code-block:: cpp
+
+ struct C : std::unary_function<int, int>
+ {
+   int operator()(int);
+ };
+
+ template<typename T>
+ struct CT : std::unary_function<T, bool>
+ {
+   bool operator()(T);
+ };
+
+Note that the last template argument for ``std::unary_function`` specifies the
+return type of the functor.
+
+**Solution**
+
+Match the types of the template parameter with the parameter and return type of
+the function call operator of the given functor.
+
+**Notes**
+
+``std::unary_function`` is deprecated in the C++11 standard.
+
+ericsson.mtas
+^^^^^^^^^^^^^
+
+.. _ericsson-mtas-DbnDelayAfterRetry:
+
+ericsson.mtas.DbnDelayAfterRetry
+""""""""""""""""""""""""""""""""
+
+If the status of a transaction is retry, there should be a random amount of delay
+before the transaction is restarted. This checker only checks if the delay exists
+between retries but does not check if the time interval contains a random component.
+
+.. code-block:: cpp
+
+ void mising_delay() {
+     DicosDbTransaction trans;
+
+     for(unsigned noOfRetries = 0; noOfRetries < 20; noOfRetries++) {
+         trans.start();
+
+         Object::openDelete(5, trans);
+
+         if (trans.isRetry()) {
+             continue;
+         }
+         else if (!trans.isGood()) {
+             return;
+         }
+     }
+
+     trans.commit();
+ }
+
+**Solution**
+
+Put a delay into the controll flow if the status is retry.
+
+.. code-block:: cpp
+
+ void has_a_delay() {
+     DicosDbTransaction trans;
+
+     for(unsigned noOfRetries = 0; noOfRetries < 20; noOfRetries++) {
+         trans.start();
+
+         Object::openDelete(5, trans);
+
+         if (trans.isRetry()) {
+             Dicos_delay(rand()%90+10);
+             continue;
+         }
+         else if (!trans.isGood()) {
+             return;
+         }
+     }
+
+     trans.commit();
+ }
+
+.. _ericsson-mtas-DialogueSetupCreate:
+
+ericsson.mtas.DialogueSetupCreate
+"""""""""""""""""""""""""""""""""
+
+Instances of Dialogue ``*_Setup`` classes must be created in ``systemStarted()``
+for static processes and in ``start()`` for dynamic processes; with no exception.
+
+.. code-block:: cpp
+
+ class X
+ {
+     Dialogue_Setup* d;
+ public:
+     void start() { OtherClass n; }
+     void systemStarted() { d = new Dialogue_Setup(); }  // OK
+ };
+
+ class Y
+ {
+     Dialogue_Setup* d;
+ public:
+     void bar() { d = new Dialogue_Setup(); }
+     void foo() { bar(); }
+     void start() { foo(); } // OK
+ };
+
+ class Z
+ {
+ public:
+     void systemStarted() {}
+     void start() { Dialogue_Setup* d = new Dialogue_Setup(); }  // warning
+ };
+
+.. _ericsson-mtas-EpctParameters:
+
+ericsson.mtas.EpctParameters
+""""""""""""""""""""""""""""
+
+**MTAS OAM Design Rule 11**
+
+Epct parameters shall not be used for the application. Existing epct parameters should be deprecated.
+Configuration aspects relevant to an operator shall instead be supported by Managed Objects and attributes.
+
+Deviation from this rule requires PC-MTAS approval.
+
+.. _ericsson-mtas-IllegalTracing:
+
+ericsson.mtas.IllegalTracing
+""""""""""""""""""""""""""""
+
+The trace macros that are defined in **TasTrace.hh** should be used. For this
+reason direct use of ``printf`` and ``cout`` and ``cerr`` are not permitted.
+
+.. _ericsson-mtas-LicenseManagement:
+
+ericsson.mtas.LicenseManagement
+"""""""""""""""""""""""""""""""
+
+**MTAS OAM Design Rule 44**
+
+After each successful response for a license request, the allocated resources in
+the License Manager Process must be released, this is done by calling the
+``licenseRelease`` function. The ``TSPLicenseManagerBackend`` does this
+automaticaly, so it should be used instead of raw license management.
+
+.. _ericsson-mtas-MtasConventions:
+
+ericsson.mtas.MtasConventions
+"""""""""""""""""""""""""""""
+
+This checker aims to verify that the subject codebase does not violate the MTAS
+coding conventions.
+
+The following rules are presently implemented:
+
+- Typenames should start with an uppercase letter.
+- Variable names should start with a lowercase letter.
+- Names of constants should consist of only uppercase characters.
+- Function and method names should start with a lowercase letter.
+- Template parameter names should be a single uppercase letter.
+- Global variables should be referenced absolutely. For example:
+
+.. code-block:: cpp
+
+ int x = 42;
+
+ void do_stuff() {
+   x++; // wrong!
+   ::x++; // correct
+ }
+
+- Member variables should have the prefix '*m*', followed by an uppercase letter.
+- Boolean variables and methods returning boolean values should have the name prefix '*is*', or '*IS*' in case of constant boolean variables.
+- Header files should not contain function definitions (except for templates).
+- Namespace names should not contain uppercase letters.
+- All type conversions should be explicit (i.e. no implicit casts).
+- The visibility order inside classes and structs should be: public, protected, private.
+- Avoid implicit testing for zero values, use explicit comparisons instead. For example:
+
+.. code-block:: cpp
+
+ int x = getValue();
+
+ if(!x) {} // wrong!
+ if(x == 0) {} // correct
+
+- Infinite loops should be written as ``while(true)`` and not as e.g. ``for(;;)``.
+- Usage of *do...while* loops can and should be avoided.
+- Usage of page break and tab characters should be avoided.
+
+**Note**: some related checks have been implemented by different checkers, such as:
+
+- Non private data
+- Magic number literals
+- ericsson-cpp-style-ReduceScope_
+
+.. _ericsson-mtas-SerializeVersion:
+
+ericsson.mtas.SerializeVersion
+""""""""""""""""""""""""""""""
+
+If class have serialize() then it should have getClassVersion() returning and integer, which is not 0, not garbage, but a
+const or enum value.
+
+.. code-block:: cpp
+
+ class X
+ {
+   const int m_version = 0123;
+ public:
+   void serialize() { ... }
+   int getClassVersion() { return m_version; }	// OK
+ };
+
+.. _ericsson-mtas-SerializeWithoutObserver:
+
+ericsson.mtas.SerializeWithoutObserver
+""""""""""""""""""""""""""""""""""""""
+
+If class have serialize() then it should inherit from ISerializerObserver. This
+is the MTAS, DR Start, Restart design rule 19.
+
+.. code-block:: cpp
+
+ class X : ISerializerObserver
+ {
+   void serialize() { ... }
+ };
+
+ericsson.tsp
+^^^^^^^^^^^^
+
+.. _ericsson-tsp-DbnTransactionManagement:
+
+ericsson.tsp.DbnTransactionManagement
+"""""""""""""""""""""""""""""""""""""
+
+This checker verifies the DBN transaction management.
+It detects the following issues:
+
+- Double commit of a transaction
+- Uncommited changes to a transaction
+- Unchecked commit or rollback result
+- Transaction reuse without restarting the transaction object
+
+**Examples**
+
+.. code-block:: cpp
+
+ void unchecked_commit() {
+     DicosDbTransaction t;
+     // use t
+     t.commit()
+     if(false_condition)
+     {
+         t.assertGoodStatus();
+     }
+     // warning
+ }
+
+.. code-block:: cpp
+
+ void double_commit() {
+     DicosDbTransaction t;
+
+     t.commit();
+     if(condition)
+     {
+         t.commit(); // warning
+     }
+
+     t.assertGoodStatus();
+ }
+
+If *condition* is feasible, then there will exist a code path on which the
+transaction is double-committed in line 8.
+
+The transaction object goes out of scope at the end of the function, however,
+its state was never checked after commit. This check is also path-sensitive.
+
+.. code-block:: cpp
+
+ void commit_unchecked_reuse() {
+     DicosDbTransaction t;
+     t.commit();
+
+     t.start();
+ }
+
+In the last line, the transaction object is re-used, even though the state of
+the transaction after the last commit was never checked. This check is also
+path-sensitive.
+
+**Limitations**
+
+- Derived transaction types (i.e. classes that inherit from the transaction class) are not handled properly.
+- Calling transaction methods through the *this* pointer is not handled properly.
+- Heap-allocated (with *new*) transactions are currently ignored.
+
+.. _ericsson-tsp-TspBuiltinTypes:
+
+ericsson.tsp.TspBuiltinTypes
+""""""""""""""""""""""""""""
+
+This checker aims to detect usages of portability-unsafe types.
+More specifically, it will issue a warning whenever a variable with any of the
+following types is declared: **short**, **float** and **long**.
+
+alpha.ericsson
+^^^^^^^^^^^^^^
+
+Checkers marked as *Alpha* are under development and should not be
+generally used in production, as they may not work, work incorrectly, or
+produce a large amount of false positives. These are disabled by
+default, and placed in the special top-level package **alpha.ericsson**.
+
+.. _alpha-ericsson-MemsizeParamOverload:
+
+alpha.ericsson.MemsizeParamOverload
+"""""""""""""""""""""""""""""""""""
+
+Detects function calls which have multiple overloads with different size
+parameters at the same position, and the argument at this position in the
+function call has a memsize type (``size_t``, ``ptrdiff_t``, ``intptr_t``,
+``uintptr_t``). This is dangerous because compiling the code on 32/64 bit
+architectures, another overload will be used.
+
+**Example**
+
+.. code-block:: cpp
+
+ #include <cstdint>
+ void f(std::uint32_t) {}
+ void f(std::uint64_t) {}
+ int main()
+ {
+   // This calls f(std::uint32_t) on a 32bit architecture and f(std::uint64_t)
+   // on a 64bit architecture.
+   f(std::size_t());
+ }
+
+**Solution**
+
+Call the function with a non-memsize type which has the same size on all
+architectures or eliminate one of the overloads.
+
+**Configuration**
+
+The checker has a config option:
+
+``-analyzer-config alpha.ericsson.MemsizeParamOverload:AnyTypedefType=true``
+
+If this option is given then the checker reports on any typedef type argument
+in the function call assuming that its underlying type may change, even if it
+is not a memsize type currently:
+
+.. code-block:: cpp
+
+ #include <cstdint>
+ typedef std::uint32_t MyTypedef;
+ void f(std::uint32_t) {}
+ void f(std::uint64_t) {}
+ int main() { f(MyTypedef()); }
+
+.. _alpha-ericsson-NegativeArrayIndex:
+
+alpha.ericsson.NegativeArrayIndex
+"""""""""""""""""""""""""""""""""
+
+This checker finds array subscript expressions (indexing), where the index is
+known to be negative. This indicates a possible overflow in the index value.
+
+When the index is a negative literal then no issue is reported. We assume that
+indexing with an integer literal is intentional.
+
+**Examples**
+
+.. code-block:: cpp
+
+ void bar(int* a)
+ {
+   int i = a[-1];  // No warning here because negative literal is used.
+ }
+
+ int foo(int i)
+ {
+   static int d[32];
+   return d[i];  // Warning on overflowed negative index.
+ }
+
+ int main() {
+   int i = INT_MAX;
+   int r = foo(i + 1);
+   int arr[10];
+   bar(arr + 5);
+ }
+
+**Solution**
+
+Use memsize types for array indexing in order to minimize the possibility of
+overflow.
+
+.. _alpha-ericsson-NonPortableUnion:
+
+alpha.ericsson.NonPortableUnion
+"""""""""""""""""""""""""""""""
+
+Unions can be prone to portability problems if one field is of pointer type or
+long type that has architecture dependent size (32 bit wide on 32-bit
+architecture and 64 bit wide on 64-bits architecture) and another field is used
+to alter content of this field which has non-architecture dependent type (such
+as int).
+
+**Example**
+
+.. code-block:: cpp
+
+ union SizetToBytesUnion_wrong {
+   size_t value;
+   struct {//error: on 64bit architecture, the only 4 bytes can be accessed with this struct
+    unsigned char b0, b1, b2, b3;
+    } bytes;
+ } uw;
+
+ uw.value=0xFFFFFFFF;
+ uw.bytes.b3;
+
+Here, ``uw.bytes`` can only address the first 4 bytes of ``uw.value`` instead of
+all 8.
+
+**Solution**
+
+Take the architecture dependent types into consideration.
+
+.. code-block:: cpp
+
+ union SizetToBytesUnion_correct {
+   size_t value;
+   char[sizeof(value)] bytes;
+ } uc;
+
+.. _alpha-ericsson-SufficientSizeArrayIndexing:
+
+alpha.ericsson.SufficientSizeArrayIndexing
+""""""""""""""""""""""""""""""""""""""""""
+
+In 64-bit sys, programs could use more than 4 GB of memory.
+When the array in such program is larger than INT_MAX, use variable of
+int/unsigned int type to index array can never get the desired value.
+
+**Example**
+
+.. code-block:: cpp
+
+ #include <limits.h>
+
+ short f(int index) {
+   short array[(long)INT_MAX + 1] = {0};
+   return array[index];
+ }
+
+**Solution**
+
+Use sufficient sized types for indexing, for example memsize types like ``size_t``.
+
+.. code-block:: cpp
+
+ short f(size_t index) {
+   short array[(long)INT_MAX + 1] = {0};
+   return array[index];
+ }
+
+.. _alpha-ericsson-concurrency-SplitCriticalSections:
+
+alpha.ericsson.concurrency.SplitCriticalSections
+""""""""""""""""""""""""""""""""""""""""""""""""
+
+Find cases where a value is written in one critical section and read in a
+subsequent one, where the two critical sections are protected by exactly the
+same set of locks. The purpose of the checker is to warn about cases where
+the value of the variable may be changed between the two critical sections.
+The proposed solution is to merge these two critical sections into one, or to
+remove the read or the write of the value from the critical section.
+
+The checkser supports both pthread mutex and the STL mutex.
+
+**Example (C)**
+
+.. code-block:: cpp
+
+ pthread_mutex_t mutex;
+
+ pthread_mutex_lock(&mutex);
+ char *firstC = strchr(shared_string, 'c');
+ pthread_mutex_unlock(&mutex);
+
+ if (!firstC)
+   return;
+
+ pthread_mutex_lock(&mutex);
+ *firstC = 'C';
+ pthread_mutex_unlock(&mutex);
+
+**Solution**
+
+Since ``firstC`` may be changed by another thread between its write and read the
+two critical sections should be merged into one.
+
+**Example (C++)**
+
+.. code-block:: cpp
+
+ std::mutex mtx;
+
+ mtx.lock();
+ size_t index = shared_string.find('c');
+ mtx.unlock();
+
+ if (index == shared_string.length())
+   return;
+
+ mtx.lock();
+ shared_string[index] = 'C';
+ mtx.unlock();
+
+**Solution**
+
+Since ``index`` may be changed by another thread between its write and read the
+two critical sections should be merged into one.
+
+.. _alpha-ericsson-cpp-BitWiseShift:
+
+alpha.ericsson.cpp.BitWiseShift
+"""""""""""""""""""""""""""""""
+
+Finds undefined behavior caused by the bitwise left- and right-shift operator
+operating on integer types.
+The shift E1 (<<|>>) E2 is erroneous if E2 is negative or if the result of the
+shift is not representable in the signed type of E1 (ie. if E1 is unsigned int,
+its signed type is int). That is true in C, however C++ is bit more lax, as it
+requires that the result is representable in the unsigned type E1 (which means
+1 extra bit of freedom in C++ compared to C when using 2-s complement
+representation).
+
+**Example**
+
+.. code-block:: cpp
+
+ int bad_negative_rhs() {
+   return 8 >> -1; // negative rhs
+ }
+
+ int good_left_shift(int left, int righ) {
+   static_assert(sizeof(int) == 4 && "assuming 32-bit int")
+   if (right < 0 && right >= 31)
+     return -1;
+   return left << right; // OK in both C and C++
+ }
+
+ int bad_left_shift() {
+   static_assert(sizeof(int) == 4 && "assuming 32-bit int")
+   return 1 << 32; // overshift
+ }
+
+ int bad_left_shift_in_c_but_ok_in_cpp() {
+   static_assert(sizeof(int) == 4 && "assuming 32-bit int")
+   return 1 << 31; // edge case, different in C and C++
+ }
+
+**Solution**
+
+Ensure the shift operands are in proper range before shifting.
+.. _alpha-ericsson-cpp-InvariablePtrBranch:
+
+alpha.ericsson.cpp.InvariablePtrBranch
+""""""""""""""""""""""""""""""""""""""
+
+*Important note:* this checker is an Alpha-state checker, which means it is
+still heavily under development and testing. As such, it is placed in the
+**alpha** top-level package, and is disabled by default.
+
+This checker detects pointer null-checking branch conditions whose result in the
+same on all code paths. This can be either a branch condition which is always
+satisfied, or one which can never be satisfied. This indicates an inconsistency
+in the code logic.
+
+**Examples**
+
+.. code-block:: cpp
+
+ int* ptr = getPtr();
+ if(!ptr)
+ {
+    std::cout << "Ptr is null!" << std::endl;
+
+    if(ptr) // warn
+    {
+       std::cout << *ptr << std::endl;
+    }
+ }
+
+The inner ``if(ptr)`` branch is pointless, and can never be satisfied, because
+the outer branch constraints the value of ptr to be NULL.
+
+.. code-block:: cpp
+
+ int* ptr = nullptr;
+ if(!ptr) // warn
+ {
+     doWork();
+ }
+
+The branch will obviously always be taken, and therefore it is pointless to
+check the condition.
+
+**Solution**
+
+Remove the unnecessary checks or the branches that are never executed.
+
+.. _alpha-ericsson-cpp-IteratorMismatch:
+
+alpha.ericsson.cpp.IteratorMismatch
+"""""""""""""""""""""""""""""""""""
+
+Find cases where iterator and container or two iterators do not match. These
+cases include applying an iterator on the wrong container, using iterators of
+two different containers for a range or comparing two iterators of different
+containers.
+
+**Example**
+
+.. code-block:: cpp
+
+ void bad_erase1(std::list<int> l1, std::list<int> l2, int n) {
+   auto i = std::find(l1.begin(), l1.end(), n);
+   l2.erase(i); // i is an iterator of l1, not l2
+ }
+
+ void bad_erase2(std::list<int> l1, std::list<int> l2, int n) {
+   auto i = std::find(l1.begin(), l1.end(), n);
+   if (i != l2.end()) // i is an iterator of l1, never will be equal to l2.end()
+     l1.erase(i);
+ }
+
+**Solution**
+
+Apply an iterator to the correct container, use iterators of the same container
+for a rage, only compare iterators of the same container.
+
+.. _alpha-ericsson-cpp-IteratorOutOfRange:
+
+alpha.ericsson.cpp.IteratorOutOfRange
+"""""""""""""""""""""""""""""""""""""
+
+Find cases where an iterator is dereferenced outside its valid range: either
+past its end (the end() of the container or behind) or ahead of its beginning
+(ahead of the begin() of the container). The checker also warns if an iterator
+outside its valid range is incremented or decremented in a way that it remains
+outside its valid range on the same side.
+
+The most typical case when this checker warns is where the return value of
+a search function (e.g. ``std::find()``) is dereferenced without checking whether
+it is the past-end iterator of the container. (Which happens whenever the
+searched item is not found.)
+
+**Example**
+
+.. code-block:: cpp
+
+ int bad_find(std::vector<int> vec, int n) {
+   auto i = std::find(vec.begin(), vec.end(), n);
+   return *i; // n might not be in vec, i is the past-end iterator of vec
+ }
+
+**Solution**
+
+Ensure that iterator is never dereferenced outside its valid range. The ony
+valid operation of an out-of-range iterator is to increment/decrement it in a
+way that it gets inside its valid range. When searching, always check for the
+"not found" case. If the element is surely to be found, use an assertion.
+
+.. _alpha-ericsson-statisticsbased-SpecialReturnValue:
+
+alpha.ericsson.statisticsbased.SpecialReturnValue
+"""""""""""""""""""""""""""""""""""""""""""""""""
+
+Find function calls where the return value of the called function is considered
+to be possibly a value that needs special handling. Such special return value
+could be null pointer (that may be dereferenced later) or a negative value (that
+may be used for indexing). Currently only these two kinds of special return
+values are supported. The functions which are considered to be able to return
+such values are determined during the initial phase of the analysis on
+statistical base: if the ratio of number of calls where the return value is
+compared to the special value / total number of calls is above a configurable
+threshold (CodeChecker parameter ``--stats-relevance-threshold``) the function is
+considered to be able to return a value the needs to be handled specially. The
+minimum number of calls below which the function is not included in the
+statistics is also configurable (CodeChecker parameter
+``--stats-min-sample-count``).
+
+CodeChecker automatically generates the statistics and stores then in a YAML
+file called **SpecialReturn.yaml**. This file is located in a directory passed
+by analyzer option ``-api-metadata-path``. Running the checker using CodeChecker
+this option must not be used directly but via CodeChecker option
+``--stats-use``. See CodeChecker documentation for further information.
+
+The checker itself does not emit any warning, the warnings are emitted by other
+checkers if the special return value is not handled as it should: for example,
+if a functions is considered to be able to return null-pointer and the return
+value of the function is dereferenced without first checking for null-pointer
+the core.NullDereference checker will warn.
+
+**Example**
+
+.. code-block:: cpp
+
+ int negative_return(); // This function can return a negative value
+ int non_negative_return(); // This function never returns a negative value
+ int *null_return(); // This function can return a null pointer
+ int *non_null_return(); // This function never returns a null pointer
+
+ #define NULL 0
+
+ void unchecked_negative() {
+   int n = negative_return();
+   int v[n]; // core.VLASize will warn here
+ }
+
+ void unchecked_non_negative() {
+   int n = non_negative_return();
+   int v[n]; // No warning here
+ }
+
+ void unchecked_null() {
+   int *n = null_return();
+   int N = *n; // core.NullDereference will warn here
+ }
+
+ void unchecked_non_null() {
+   int *n = non_null_return();
+   int N = *n; // No warning here
+ }
+
+Statistics file generated by CodeChecker:
+
+.. code-block:: yaml
+
+ #
+ # SpecialReturn metadata format 1.0
+
+ {name: "c:@F@negative_return", relation: LT, value: 0}
+ {name: "c:@F@null_return", relation: EQ, value: 0}
+
+**Solution**
+
+Handle the return value specially, use assertion or increase the threshold.
+
+.. _alpha-ericsson-statisticsbased-UncheckedReturnValue:
+
+alpha.ericsson.statisticsbased.UncheckedReturnValue
+"""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Find function calls where the return value of the called function is not
+checked (read) in the caller but it should. Functions whose return value is to
+be checked are determined during the initial phase of the analysis on
+statistical base: if the ratio of number of calls where the return value is
+checked / total number of calls is above a configurable threshold (default
+value is 85%) the function is considered to be a function where the return
+value is to be checked. The minimum number of calls below which the function is
+not included in the statistics is also configurable.
+
+This feature is only to be used with the statistics-collection ferature of
+CodeChecker.
+
+**Example**
+
+.. code-block:: cpp
+
+ int to_check();
+ int not_to_check();
+
+ int check();
+
+ void assign() {
+   int n = to_check();
+ }
+
+ void cond() {
+   if(to_check()) {}
+ }
+
+ void loop1() {
+   while(to_check()) {}
+ }
+
+ void loop2() {
+   do {} while(to_check());
+ }
+
+ void loop3() {
+   for(;to_check(););
+ }
+
+ void compare1() {
+   if (to_check() >= 0) {}
+ }
+
+ void compare2() {
+   if (to_check < 0) {}
+ }
+
+ void arg() {
+   check(to_check());
+ }
+
+ void unnecessary() {
+   if(not_to_check()) {}
+ }
+
+ void switch_case(){
+   int i;
+   switch (to_check()){
+     case 0: not_to_check(); break;
+     case 1: i = to_check(); break;
+   }
+ }
+
+ void oops() {
+   to_check(); // Using default ration of 85% the checker considers this call
+               // an error because its return value is not checked
+ }
+
+ void ok() {
+   not_to_check(); // Using default ration of 85% the checker considers this call
+                   // is not considered an error
+ }
+
+**Solution**
+
+Check the return value of the call or increase the threshold.
+
 
 Debug Checkers
 ---------------
