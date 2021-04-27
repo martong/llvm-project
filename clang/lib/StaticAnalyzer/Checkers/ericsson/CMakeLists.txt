@@ -37,6 +37,7 @@ add_clang_library(clangStaticAnalyzerEricssonCheckers
   checkers/PointerDeclChecker.cpp
   checkers/PolymorphContainerChecker.cpp
   checkers/PredWithStateChecker.cpp
+  checkers/PreferInitChecker.cpp
   checkers/RaiiMisuseChecker.cpp
   checkers/ReduceScopeChecker.cpp
   checkers/ReturnValueCheckStatisticsCollector.cpp
