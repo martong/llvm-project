@@ -147,6 +147,8 @@ void AstCheckerBase::_emitReport(const BugReportBuilder &report,
   }
   if (parentDecl)
     bugReport->setDeclWithIssue(parentDecl);
+  for (auto &&note : report.notes)
+    bugReport->addNote(note.first, note.second);
   br.emitReport(std::move(bugReport));
 }
 } // namespace template_impl_details

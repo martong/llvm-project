@@ -8,6 +8,7 @@
 #include "llvm/ADT/PointerUnion.h"
 #include "llvm/ADT/SmallVector.h"
 
+#include "clang/Analysis/PathDiagnostic.h"
 #include "clang/ASTMatchers/ASTMatchers.h"
 
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
@@ -95,6 +96,8 @@ struct BugReportBuilder {
   llvm::PointerUnion<const ::clang::Stmt *, const ::clang::Decl *>
       location; // use llvm::PointerUnion3, 4 when more type params are required
   ::clang::SourceRange addRange;
+  llvm::SmallVector<std::pair<std::string, ::clang::ento::PathDiagnosticLocation>, 0>
+      notes;
 };
 
 class AstCheckerBase : public ::clang::ento::Checker<
@@ -209,10 +212,12 @@ private:
     auto &location = b.location;                                               \
     auto &message = b.message;                                                 \
     auto &addRange = b.addRange;                                               \
+    auto &notes = b.notes;                                                     \
     message = (_message);                                                      \
     __VA_ARGS__;                                                               \
     (void)location;                                                            \
     (void)addRange;                                                            \
+    (void)notes;                                                               \
     __bugReports.push_back(b);                                                 \
   }
 
