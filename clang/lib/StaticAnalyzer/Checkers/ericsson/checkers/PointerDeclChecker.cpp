@@ -52,6 +52,9 @@ AST_CHECKER(PointerDeclChecker,
       qualNameBeginLoc = decl->getLocation();
     }
 
+    if (qualNameBeginLoc.isMacroID())
+      return;
+
     const char *c = FullSourceLoc(qualNameBeginLoc.getLocWithOffset(-1),
                                   analysisManager.getSourceManager())
                         .getCharacterData();

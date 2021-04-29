@@ -62,3 +62,11 @@ void C2::f3() {
     f2(); // no warning at 'f2'
   };
 }
+
+#define MACRO_TEST1_GOOD(NAME) int *NAME
+MACRO_TEST1_GOOD(Test1G); // no warning
+#define MACRO_TEST1_BAD(NAME) int* NAME
+MACRO_TEST1_BAD(Test1B); // no warning from macro
+
+#define MACRO_TEST2(NAME) int* NAME##_1
+MACRO_TEST2(Test2); // no warning and no crash
