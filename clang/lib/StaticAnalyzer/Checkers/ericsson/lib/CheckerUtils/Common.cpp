@@ -13,6 +13,8 @@ const CXXRecordDecl *getBaseFromSpecifier(const CXXBaseSpecifier specifier) {
 }
 
 bool isInSysHeader(SourceLocation loc, const SourceManager &sourceManager) {
+  if (loc.isInvalid())
+    return false;
   return sourceManager.isInSystemHeader(loc) ||
          sourceManager.isInExternCSystemHeader(loc);
 }

@@ -40,3 +40,15 @@ int main(int argc, const char** argv) {
     return 0;
 }
 
+// FIXME: Consider palcing these std library mocks elsewhere.
+namespace std {
+struct once_flag {
+  int _M_once;
+};
+template <typename Callable>
+void call_once(once_flag &, Callable &&) {} // MOCK-IMPL
+} // namespace std
+
+void test(std::once_flag &flag) {
+  std::call_once(flag, [] {}); // no-crash
+}
