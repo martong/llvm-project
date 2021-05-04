@@ -78,7 +78,7 @@ public:
       if (isInSysHeader(mgr.getLocForStartOfFile(fid), mgr))
         continue;
 
-      processBuffer(mgr.getBuffer(fid), fid, mgr);
+      processBuffer(mgr.getBufferOrNone(fid), fid, mgr);
     }
 
     return true;
@@ -278,7 +278,7 @@ public:
     if (v.empty())
       return true;
 
-    ast_type_traits::DynTypedNode parent = v[0];
+    DynTypedNode parent = v[0];
     if (parent.get<NamespaceDecl>() || parent.get<TranslationUnitDecl>()) {
       // now check if it was referred with '::'
       if (!Lexer::getSourceText(
@@ -426,8 +426,11 @@ private:
     }
   }
 
-  void processBuffer(const llvm::MemoryBuffer *buffer, FileID fid,
-                     SourceManager &mgr) {
+  void processBuffer(const llvm::Optional<llvm::MemoryBufferRef> buffer,
+                     FileID fid, SourceManager &mgr) {
+    if (!buffer)
+      return;
+
     // We need to account column and line numbers to be able to get back source
     // locations to report bugs
     unsigned col = 0, line = 1;

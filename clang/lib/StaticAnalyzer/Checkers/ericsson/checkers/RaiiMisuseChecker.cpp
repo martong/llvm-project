@@ -187,7 +187,7 @@ public:
 
       context.addTransition(_registerResourceValue(
           state, objRegion, fieldRegion,
-          ResourceValue(value.getAsSymExpr(), allocType, diagLocation)));
+          ResourceValue(value.getAsSymbol(), allocType, diagLocation)));
     }
   }
 

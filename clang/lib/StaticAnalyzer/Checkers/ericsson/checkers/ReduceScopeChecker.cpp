@@ -65,8 +65,7 @@ public:
       return true;
 
     const CompoundStmt *parent = nullptr;
-    ast_type_traits::DynTypedNode node =
-        ast_type_traits::DynTypedNode::create(*s);
+    DynTypedNode node = DynTypedNode::create(*s);
 
     ASTContext &actxt = m_mgr.getASTContext();
 
@@ -139,8 +138,7 @@ public:
       ASTContext &actxt = decl->getASTContext();
 
       const CompoundStmt *cs = nullptr;
-      ast_type_traits::DynTypedNode node =
-          ast_type_traits::DynTypedNode::create(*decl);
+      DynTypedNode node = DynTypedNode::create(*decl);
 
       DynTypedNodeList p = actxt.getParents(node);
       while (!cs && p.size()) {

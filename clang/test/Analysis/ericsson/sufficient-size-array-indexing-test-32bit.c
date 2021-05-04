@@ -2,13 +2,13 @@
 
 #include "Inputs/system-header-simulator.h"
 
-const unsigned long long one_byte_signed_max = (1ULL << 7) - 1;
-const unsigned long long two_byte_signed_max = (1ULL << 15) - 1;
-const unsigned long long four_byte_signed_max = (1ULL << 31) - 1;
+#define one_byte_signed_max ((1ULL << 7) - 1)
+#define two_byte_signed_max ((1ULL << 15) - 1)
+#define four_byte_signed_max ((1ULL << 31) - 1)
 
-const unsigned long long one_byte_unsigned_max = (1ULL << 8) - 1;
-const unsigned long long two_byte_unsigned_max = (1ULL << 16) - 1;
-const unsigned long long four_byte_unsigned_max = (1ULL << 32) - 1;
+#define one_byte_unsigned_max ((1ULL << 8) - 1)
+#define two_byte_unsigned_max ((1ULL << 16) - 1)
+#define four_byte_unsigned_max ((1ULL << 32) - 1)
 
 
 char smaller_than_1byte_signed_range[one_byte_signed_max];

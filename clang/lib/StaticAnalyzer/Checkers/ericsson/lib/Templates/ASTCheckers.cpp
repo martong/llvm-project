@@ -79,13 +79,13 @@ void AstCheckerBase::checkEndOfTranslationUnit(const TranslationUnitDecl *,
 
   for (const ast_matchers::BoundNodes &nodes : nodesList) {
     SourceLocation matchLoc;
-    ast_type_traits::DynTypedNode dynNode;
+    DynTypedNode dynNode;
     if (const auto *matchedDecl = nodes.getNodeAs<Decl>(KEY_NODE)) {
       matchLoc = matchedDecl->getBeginLoc();
-      dynNode = ast_type_traits::DynTypedNode::create(*matchedDecl);
+      dynNode = DynTypedNode::create(*matchedDecl);
     } else if (const auto *matchedStmt = nodes.getNodeAs<Stmt>(KEY_NODE)) {
       matchLoc = matchedStmt->getBeginLoc();
-      dynNode = ast_type_traits::DynTypedNode::create(*matchedStmt);
+      dynNode = DynTypedNode::create(*matchedStmt);
     } else {
       assert(false && "No node of supported type (Stmt, Decl) "
                       "has been bound as KEY_NODE!");
@@ -103,7 +103,7 @@ void AstCheckerBase::checkEndOfTranslationUnit(const TranslationUnitDecl *,
 }
 
 void AstCheckerBase::_emitReport(const BugReportBuilder &report,
-                                 const ast_type_traits::DynTypedNode keyNode,
+                                 const DynTypedNode keyNode,
                                  AnalysisManager &mgr, BugReporter &br) const {
   const Decl *decl = nullptr;
   const Stmt *stmt = nullptr;

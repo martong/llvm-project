@@ -107,8 +107,7 @@ public:
 
         const Expr *origExpr = call.getOriginExpr();
 
-        ast_type_traits::DynTypedNode keyNode =
-            ast_type_traits::DynTypedNode::create(*origExpr);
+        DynTypedNode keyNode = DynTypedNode::create(*origExpr);
 
         PathDiagnosticLocation loc = PathDiagnosticLocation(
             argExpr, context.getSourceManager(), context.getLocationContext());

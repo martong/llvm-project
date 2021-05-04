@@ -18,8 +18,7 @@ namespace ericsson {
 
 using namespace llvm;
 
-bool CheckValidEnclosingDeclContextSignature(
-    const ast_type_traits::DynTypedNode &pNode) {
+bool CheckValidEnclosingDeclContextSignature(const DynTypedNode &pNode) {
 
   const auto *D = pNode.get<Decl>();
   if (D == nullptr)
@@ -45,13 +44,11 @@ bool CheckValidEnclosingDeclContextSignature(
   return false;
 }
 
-const Decl *
-SearchValidEnclosingDecl(AnalysisManager &mgr,
-                         const ast_type_traits::DynTypedNode &keyNode) {
+const Decl *SearchValidEnclosingDecl(AnalysisManager &mgr,
+                                     const DynTypedNode &keyNode) {
 
   // go up in the AST searching for valid enclosing declarations
-  ast_type_traits::DynTypedNode pNode =
-      mgr.getASTContext().getParents(keyNode)[0];
+  DynTypedNode pNode = mgr.getASTContext().getParents(keyNode)[0];
 
   while (!mgr.getASTContext().getParents(pNode).empty() &&
          !(CheckValidEnclosingDeclContextSignature(pNode))) {
@@ -60,9 +57,9 @@ SearchValidEnclosingDecl(AnalysisManager &mgr,
   return pNode.get<NamedDecl>();
 }
 
-void emitFlowReport(ast_type_traits::DynTypedNode keyNode, AnalysisManager &mgr,
-                    BugReporter &br, const CheckerBase *checker,
-                    StringRef bugName, StringRef bugCategory, StringRef bugStr,
+void emitFlowReport(DynTypedNode keyNode, AnalysisManager &mgr, BugReporter &br,
+                    const CheckerBase *checker, StringRef bugName,
+                    StringRef bugCategory, StringRef bugStr,
                     PathDiagnosticLocation loc,
                     ArrayRef<SourceRange> ranges = None) {
 

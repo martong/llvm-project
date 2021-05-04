@@ -121,7 +121,7 @@ public:
 
 private:
   void _emitReport(const BugReportBuilder &report,
-                   const ::clang::ast_type_traits::DynTypedNode keyNode,
+                   const ::clang::DynTypedNode keyNode,
                    ::clang::ento::AnalysisManager &mgr,
                    ::clang::ento::BugReporter &br) const;
 

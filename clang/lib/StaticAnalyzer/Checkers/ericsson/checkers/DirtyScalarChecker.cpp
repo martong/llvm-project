@@ -215,7 +215,7 @@ bool DirtyScalarChecker::isUnbounded(CheckerContext &C, ProgramStateRef State,
 
   SValBuilder &SVB = C.getSValBuilder();
   ASTContext &Ctx = SVB.getContext();
-  const SymExpr *SE = V.getAsSymExpr();
+  const SymExpr *SE = V.getAsSymbol();
   if (!SE)
     return false;
   QualType Ty = SE->getType();

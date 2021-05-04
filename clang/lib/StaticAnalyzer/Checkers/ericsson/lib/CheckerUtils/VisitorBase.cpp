@@ -24,8 +24,7 @@ void VisitorBasedCheckerBase::reportBug(const Decl *node, StringRef message) {
       PathDiagnosticLocation(node, m_mgr.getSourceManager());
   SourceRange range = SourceRange(node->getLocation());
 
-  ast_type_traits::DynTypedNode keyNode =
-      ast_type_traits::DynTypedNode::create(*node);
+  DynTypedNode keyNode = DynTypedNode::create(*node);
 
   const Decl *parentDecl = nullptr;
   parentDecl = SearchValidEnclosingDecl(m_mgr, keyNode);
@@ -42,8 +41,7 @@ void VisitorBasedCheckerBase::reportBug(const Stmt *stmt, StringRef message) {
 
   ASTContext &astContext = m_mgr.getASTContext();
 
-  ast_type_traits::DynTypedNode keyNode =
-      ast_type_traits::DynTypedNode::create(*stmt);
+  DynTypedNode keyNode = DynTypedNode::create(*stmt);
 
   const Decl *parentDecl = nullptr;
   parentDecl = SearchValidEnclosingDecl(m_mgr, keyNode);
