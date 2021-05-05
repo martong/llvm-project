@@ -152,3 +152,12 @@ public:
   }
 };
 } // namespace
+
+void ento::registerRefCntblBaseVirtualDtorChecker(CheckerManager &Mgr) {
+  Mgr.registerChecker<RefCntblBaseVirtualDtorChecker>();
+}
+
+bool ento::shouldRegisterRefCntblBaseVirtualDtorChecker(
+    const CheckerManager &mgr) {
+  return true;
+}
