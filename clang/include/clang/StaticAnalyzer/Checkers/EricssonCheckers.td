@@ -27,8 +27,6 @@ def AlphaCpp : Package<"cpp">, ParentPackage<AlphaEricsson>;
 
 def AlphaCppSTL : Package<"stl">, ParentPackage<AlphaCpp>;
 
-def AlphaCppStyle : Package<"style">, ParentPackage<AlphaCpp>;
-
 def ConcurrencyAlpha : Package<"concurrency">, ParentPackage<AlphaEricsson>;
 
 def AlphaStatisticsBased : Package<"statisticsbased">, ParentPackage<AlphaEricsson>,
@@ -243,14 +241,6 @@ def IteratorOutOfRangeChecker : Checker<"IteratorOutOfRange">,
 def IteratorMismatchChecker : Checker<"IteratorMismatch">,
   HelpText<"Checks for container-iterator and iterator-iterator mismatches.">,
   Dependencies<[IteratorModelling]>,
-  Documentation<NotDocumented>;
-
-}
-
-let ParentPackage = AlphaCppStyle in {
-
-def PreferInitChecker : Checker<"PreferInit">,
-  HelpText<"Prefer initialization to assignment.">,
   Documentation<NotDocumented>;
 
 }

@@ -3805,36 +3805,6 @@ valid operation of an out-of-range iterator is to increment/decrement it in a
 way that it gets inside its valid range. When searching, always check for the
 "not found" case. If the element is surely to be found, use an assertion.
 
-.. _alpha-ericsson-cpp-style-PreferInit:
-
-alpha.ericsson.cpp.style.PreferInit
-"""""""""""""""""""""""""""""""""""
-
-Initialization in initialization list performs better, than initialization in
-the constructor body. When the execution of the constructor body starts, all of
-the members and bases of the given class are already initialized. If there is
-extra initialization in the body of the constructor it results in additional
-computation cost. The initialization should happen in the initialization list of
-the constructor whenever possible.
-
-**Example**
-
-.. code-block:: cpp
-
- class foo{
- public:
-   class baz {} bar;
-
-   foo(){
-     bar = baz{};
-   }
- };
-
-**Solution**
-
-The initialization should happen in the initialization list of the constructor
-whenever possible.
-
 .. _alpha-ericsson-statisticsbased-SpecialReturnValue:
 
 alpha.ericsson.statisticsbased.SpecialReturnValue
