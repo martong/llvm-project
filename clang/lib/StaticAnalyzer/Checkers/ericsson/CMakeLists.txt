@@ -54,7 +54,6 @@ add_clang_library(clangStaticAnalyzerEricssonCheckers
   checkers/MTAS/EpctParametersChecker.cpp
   checkers/MTAS/IllegalTracingChecker.cpp
   checkers/MTAS/LicenseManagementChecker.cpp
-  checkers/MTAS/MtasConventionsChecker.cpp
   checkers/MTAS/SerializeVersionChecker.cpp
   checkers/MTAS/SerializeWithoutObserverChecker.cpp
 

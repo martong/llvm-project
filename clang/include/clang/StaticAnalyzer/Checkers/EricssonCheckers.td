@@ -198,10 +198,6 @@ def DbnDelayAfterRetryChecker : Checker<"DbnDelayAfterRetry">,
   HelpText<"Detects when a DBN transaction is retried without delay.">,
   Documentation<NotDocumented>;
 
-def MtasConventionsChecker : Checker<"MtasConventions">,
-  HelpText<"Validates the code against MTAS coding conventions.">,
-  Documentation<NotDocumented>;
-
 }
 
 let ParentPackage = AlphaCpp in {

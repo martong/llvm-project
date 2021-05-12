@@ -3269,57 +3269,6 @@ the License Manager Process must be released, this is done by calling the
 ``licenseRelease`` function. The ``TSPLicenseManagerBackend`` does this
 automaticaly, so it should be used instead of raw license management.
 
-.. _ericsson-mtas-MtasConventions:
-
-ericsson.mtas.MtasConventions
-"""""""""""""""""""""""""""""
-
-This checker aims to verify that the subject codebase does not violate the MTAS
-coding conventions.
-
-The following rules are presently implemented:
-
-- Typenames should start with an uppercase letter.
-- Variable names should start with a lowercase letter.
-- Names of constants should consist of only uppercase characters.
-- Function and method names should start with a lowercase letter.
-- Template parameter names should be a single uppercase letter.
-- Global variables should be referenced absolutely. For example:
-
-.. code-block:: cpp
-
- int x = 42;
-
- void do_stuff() {
-   x++; // wrong!
-   ::x++; // correct
- }
-
-- Member variables should have the prefix '*m*', followed by an uppercase letter.
-- Boolean variables and methods returning boolean values should have the name prefix '*is*', or '*IS*' in case of constant boolean variables.
-- Header files should not contain function definitions (except for templates).
-- Namespace names should not contain uppercase letters.
-- All type conversions should be explicit (i.e. no implicit casts).
-- The visibility order inside classes and structs should be: public, protected, private.
-- Avoid implicit testing for zero values, use explicit comparisons instead. For example:
-
-.. code-block:: cpp
-
- int x = getValue();
-
- if(!x) {} // wrong!
- if(x == 0) {} // correct
-
-- Infinite loops should be written as ``while(true)`` and not as e.g. ``for(;;)``.
-- Usage of *do...while* loops can and should be avoided.
-- Usage of page break and tab characters should be avoided.
-
-**Note**: some related checks have been implemented by different checkers, such as:
-
-- Non private data
-- Magic number literals
-- ericsson-cpp-style-ReduceScope_
-
 .. _ericsson-mtas-SerializeVersion:
 
 ericsson.mtas.SerializeVersion
