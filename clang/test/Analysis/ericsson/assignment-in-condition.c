@@ -1,4 +1,7 @@
 // RUN: %clang_analyze_cc1 -analyzer-checker=ericsson.misrac.AssignmentInCondition -Wno-everything -verify %s
+
+#include "Inputs/bugs-in-system-header.h"
+
 void f1() {
   int a = 1, b = 2;
 
@@ -45,6 +48,13 @@ void f7() {
   int a = 1, b = 2, c = 6;
 
   if ((a - (b = c)) == 2) {// expected-warning {{Assignment operator is used in a condition}}
+  }
+}
+
+void f8() {
+  int a = 1;
+
+  if (sys_func_with_assign(a) > 10) { // no-warning
   }
 }
 

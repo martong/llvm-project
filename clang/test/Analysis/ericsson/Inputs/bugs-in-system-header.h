@@ -7,3 +7,6 @@ void test_missing_const() {
 }
 
 #define TEST_MISSING_CONST(X) int __x = X
+
+int __global_int;
+#define sys_func_with_assign(X) ( __global_int = X + 1 )

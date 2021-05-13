@@ -15,6 +15,7 @@
 ** -----------------------------------------------------------------------------
 */
 
+#include "CheckerUtils/Common.h"
 #include "Matchers/Generic.h"
 #include "Templates/ASTCheckers.h"
 
@@ -32,7 +33,7 @@ AST_CHECKER(AssignmentInConditionChecker,
 
   BUILD_MATCHER() {
     auto hasAssign =
-        hasCondition(expr(hasDescendant(binaryOperator(hasOperatorName("="))))
+        hasCondition(expr(hasDescendant(binaryOperator(hasOperatorName("=")).bind("AssignOp")))
                          .bind(KEY_NODE));
 
     return stmt(anyOf(ifStmt(hasAssign), doStmt(hasAssign), forStmt(hasAssign),
@@ -40,6 +41,16 @@ AST_CHECKER(AssignmentInConditionChecker,
   }
 
   HANDLE_MATCH(boundNodes, analysisManager) {
+    const SourceManager &SM = analysisManager.getSourceManager();
+    const auto *AssignOp = boundNodes.getNodeAs<Expr>("AssignOp");
+    // Check if the assignment is inside a macro in a system header.
+    // Some system API calls are implemented this way and otherwise cause unnecessary warnings.
+    // Note: This code should work if getBeginLoc returns invalid (if possible).
+    SourceLocation SpellingLoc = SM.getSpellingLoc(AssignOp->getBeginLoc());
+    if (isInSysHeader(SpellingLoc, SM) && SM.isMacroBodyExpansion(AssignOp->getBeginLoc()))
+      return;
+
+    // FIXME: Use location of AssignOp for the bug report.
     REPORT_BUG("Assignment operator is used in a condition");
   }
 }
