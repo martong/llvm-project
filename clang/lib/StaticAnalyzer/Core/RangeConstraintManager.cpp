@@ -508,12 +508,14 @@ namespace {
 class EquivalenceClass;
 } // end anonymous namespace
 
+REGISTER_MAP_WITH_PROGRAMSTATE(SymParentMap, SymbolRef, SymbolSet)
 REGISTER_MAP_WITH_PROGRAMSTATE(ClassMap, SymbolRef, EquivalenceClass)
 REGISTER_MAP_WITH_PROGRAMSTATE(ClassMembers, EquivalenceClass, SymbolSet)
 REGISTER_MAP_WITH_PROGRAMSTATE(ConstraintRange, EquivalenceClass, RangeSet)
 
 REGISTER_SET_FACTORY_WITH_PROGRAMSTATE(ClassSet, EquivalenceClass)
 REGISTER_MAP_WITH_PROGRAMSTATE(DisequalityMap, EquivalenceClass, ClassSet)
+
 
 namespace {
 /// This class encapsulates a set of symbols equal to each other.
@@ -1550,9 +1552,103 @@ private:
     return State->set<ConstraintRange>(Constraints);
   }
 
+  class ParentMapUpdater : public SymExprVisitor<ParentMapUpdater, void> {
+    ProgramStateRef State;
+    SymbolRef Parent;
+    SymParentMapTy::Factory &PMF;
+    SymbolSet::Factory &SSF;
+
+    SymbolSet addParentToSym(SymbolRef Sym) const {
+      // Get the top-level parents for the symbol.
+      const SymbolSet *Parents = State->get<SymParentMap>(Sym);
+      if (Parents) {
+        return SSF.add(*Parents, Parent);
+      }
+      return SSF.add(SSF.getEmptySet(), Parent);
+    }
+
+    void updateParentMap(SymbolRef Sym) {
+      SymbolSet NewParents = addParentToSym(Sym);
+      SymParentMapTy ParentMap = State->get<SymParentMap>();
+      ParentMap = PMF.remove(ParentMap, Sym);
+      ParentMap = PMF.add(ParentMap, Sym, NewParents);
+      State = State->set<SymParentMap>(ParentMap);
+    }
+
+  public:
+    ParentMapUpdater(ProgramStateRef &State, SymbolRef Parent)
+        : State(State), Parent(Parent), PMF(State->get_context<SymParentMap>()),
+          SSF(State->get_context<SymbolSet>()) {
+            Visit(Parent);
+          }
+
+    ProgramStateRef getState() { return State; }
+
+    void VisitSymExpr(SymbolRef Sym) {
+      //updateParentMap(Sym);
+    }
+    void VisitSymIntExpr(const SymIntExpr *Sym) {
+      updateParentMap(Sym->getLHS());
+      Visit(Sym->getLHS());
+    }
+    void VisitIntSymExpr(const IntSymExpr *Sym) {
+      updateParentMap(Sym->getRHS());
+      Visit(Sym->getRHS());
+    }
+    void VisitSymSymExpr(const SymSymExpr *Sym) {
+      updateParentMap(Sym->getLHS());
+      updateParentMap(Sym->getRHS());
+      Visit(Sym->getLHS());
+      Visit(Sym->getRHS());
+    }
+  };
+
+  class ConstraintUpdater : public SymExprVisitor<ConstraintUpdater, void> {
+    ProgramStateRef State;
+    SymbolRef Parent;
+    SymbolRef NewSym;
+    RangeSet NewConstraint;
+
+  public:
+    ConstraintUpdater(ProgramStateRef &State, SymbolRef Parent, SymbolRef NewSym,
+                      RangeSet NewConstraint)
+        : State(State), Parent(Parent), NewSym(NewSym),
+          NewConstraint(NewConstraint) {
+      llvm::errs() << "Parent: ";
+      Parent->dump();
+      llvm::errs() << "\n";
+      llvm::errs() << "Child: ";
+      NewSym->dump();
+      llvm::errs() << "\n";
+    }
+  };
+
   LLVM_NODISCARD inline ProgramStateRef
   setConstraint(ProgramStateRef State, SymbolRef Sym, RangeSet Constraint) {
-    return setConstraint(State, EquivalenceClass::find(State, Sym), Constraint);
+    State = ParentMapUpdater(State, Sym).getState();
+
+    State = setConstraint(State, EquivalenceClass::find(State, Sym), Constraint);
+
+    const SymbolSet *Parents = State->get<SymParentMap>(Sym);
+    if (Parents) {
+      for (SymbolRef Parent : *Parents) {
+        ConstraintUpdater(State, Parent, Sym, Constraint);
+        SValBuilder &SVB = getSValBuilder();
+        SVal SimplifiedParentVal =
+            SVB.simplifySVal(State, SVB.makeSymbolVal(Parent));
+        llvm::errs() << "Simplified Parent: ";
+        SimplifiedParentVal.dump();
+        const RangeSet *ParentConstraint = getConstraint(State, Parent);
+        if (ParentConstraint)
+          State = setConstraint(
+              State,
+              EquivalenceClass::find(State, SimplifiedParentVal.getAsSymbol()),
+              *ParentConstraint);
+        llvm::errs() << "\n";
+      }
+    }
+
+    return State;
   }
 };
 
