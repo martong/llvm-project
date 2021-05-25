@@ -1704,6 +1704,7 @@ ConstraintMap ento::getConstraintMap(ProgramStateRef State) {
 
 inline EquivalenceClass EquivalenceClass::find(ProgramStateRef State,
                                                SymbolRef Sym) {
+  assert(State && "State should not be null");
   assert(Sym && "Symbol should not be null");
   // We store far from all Symbol -> Class mappings
   if (const EquivalenceClass *NontrivialClass = State->get<ClassMap>(Sym))
