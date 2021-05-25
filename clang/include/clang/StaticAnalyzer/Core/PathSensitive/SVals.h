@@ -155,6 +155,8 @@ public:
 
   bool isZeroConstant() const;
 
+  llvm::Optional<llvm::APSInt> getConstantValue() const;
+
   /// hasConjuredSymbol - If this SVal wraps a conjured symbol, return true;
   bool hasConjuredSymbol() const;
 
