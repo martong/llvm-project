@@ -1631,19 +1631,33 @@ private:
 
     const SymbolSet *Parents = State->get<SymParentMap>(Sym);
     if (Parents) {
-      for (SymbolRef Parent : *Parents) {
-        ConstraintUpdater(State, Parent, Sym, Constraint);
+      for (SymbolRef ParentSym : *Parents) {
+        ConstraintUpdater(State, ParentSym, Sym, Constraint);
         SValBuilder &SVB = getSValBuilder();
+
         SVal SimplifiedParentVal =
-            SVB.simplifySVal(State, SVB.makeSymbolVal(Parent));
-        llvm::errs() << "Simplified Parent: ";
+            SVB.simplifySVal(State, SVB.makeSymbolVal(ParentSym));
+        llvm::errs() << "Simplified ParentSym: ";
         SimplifiedParentVal.dump();
-        const RangeSet *ParentConstraint = getConstraint(State, Parent);
-        if (ParentConstraint)
+
+        SymbolRef SimplifiedParentSym = SimplifiedParentVal.getAsSymbol();
+        const RangeSet *ParentConstraint = getConstraint(State, ParentSym);
+        // Set the existing constraint on the newly simplified parent.
+        if (SimplifiedParentSym && ParentConstraint)
           State = setConstraint(
               State,
               EquivalenceClass::find(State, SimplifiedParentVal.getAsSymbol()),
               *ParentConstraint);
+
+        // If the simplification yields a constant then set that as a
+        // constraint on the parent.
+        //if (SimplifiedParentVal.isConstant()) {
+          //State = setConstraint(
+              //State,
+              //EquivalenceClass::find(State, ParentSym),
+              //this->F.getRangeSet(SimplifiedParentVal.getConstantValue().getValue()));
+        //}
+
         llvm::errs() << "\n";
       }
     }
@@ -1684,6 +1698,7 @@ ConstraintMap ento::getConstraintMap(ProgramStateRef State) {
 
 inline EquivalenceClass EquivalenceClass::find(ProgramStateRef State,
                                                SymbolRef Sym) {
+  assert(Sym && "Symbol should not be null");
   // We store far from all Symbol -> Class mappings
   if (const EquivalenceClass *NontrivialClass = State->get<ClassMap>(Sym))
     return *NontrivialClass;
