@@ -1626,8 +1626,11 @@ private:
   LLVM_NODISCARD inline ProgramStateRef
   setConstraint(ProgramStateRef State, SymbolRef Sym, RangeSet Constraint) {
     State = ParentMapUpdater(State, Sym).getState();
+    assert(State);
 
     State = setConstraint(State, EquivalenceClass::find(State, Sym), Constraint);
+    if (!State)
+      return nullptr;
 
     const SymbolSet *Parents = State->get<SymParentMap>(Sym);
     if (Parents) {
