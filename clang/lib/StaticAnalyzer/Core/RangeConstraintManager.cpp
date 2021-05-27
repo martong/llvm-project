@@ -1606,26 +1606,6 @@ private:
     }
   };
 
-  class ConstraintUpdater : public SymExprVisitor<ConstraintUpdater, void> {
-    ProgramStateRef State;
-    SymbolRef Parent;
-    SymbolRef NewSym;
-    RangeSet NewConstraint;
-
-  public:
-    ConstraintUpdater(ProgramStateRef &State, SymbolRef Parent, SymbolRef NewSym,
-                      RangeSet NewConstraint)
-        : State(State), Parent(Parent), NewSym(NewSym),
-          NewConstraint(NewConstraint) {
-      llvm::errs() << "Parent: ";
-      Parent->dump();
-      llvm::errs() << "\n";
-      llvm::errs() << "Child: ";
-      NewSym->dump();
-      llvm::errs() << "\n";
-    }
-  };
-
   LLVM_NODISCARD inline ProgramStateRef
   setConstraint(ProgramStateRef State, SymbolRef Sym, RangeSet Constraint) {
     State = ParentMapUpdater(State, Sym).getState();
@@ -1638,13 +1618,10 @@ private:
     const SymbolSet *Parents = State->get<SymParentMap>(Sym);
     if (Parents) {
       for (SymbolRef ParentSym : *Parents) {
-        ConstraintUpdater(State, ParentSym, Sym, Constraint);
         SValBuilder &SVB = getSValBuilder();
 
         SVal SimplifiedParentVal =
             SVB.simplifySVal(State, SVB.makeSymbolVal(ParentSym));
-        llvm::errs() << "Simplified ParentSym: ";
-        SimplifiedParentVal.dump();
 
         SymbolRef SimplifiedParentSym = SimplifiedParentVal.getAsSymbol();
         const RangeSet *ParentConstraint = getConstraint(State, ParentSym);
@@ -1654,17 +1631,6 @@ private:
               State,
               EquivalenceClass::find(State, SimplifiedParentVal.getAsSymbol()),
               *ParentConstraint);
-
-        // If the simplification yields a constant then set that as a
-        // constraint on the parent.
-        //if (SimplifiedParentVal.isConstant()) {
-          //State = setConstraint(
-              //State,
-              //EquivalenceClass::find(State, ParentSym),
-              //this->F.getRangeSet(SimplifiedParentVal.getConstantValue().getValue()));
-        //}
-
-        llvm::errs() << "\n";
       }
     }
 
