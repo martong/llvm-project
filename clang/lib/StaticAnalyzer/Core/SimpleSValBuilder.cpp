@@ -1107,7 +1107,6 @@ const llvm::APSInt *SimpleSValBuilder::getKnownValue(ProgramStateRef state,
   if (SymbolRef Sym = V.getAsSymbol())
     return state->getConstraintManager().getSymVal(state, Sym);
 
-  // FIXME: Add support for SymExprs.
   return nullptr;
 }
 
@@ -1139,6 +1138,15 @@ SVal SimpleSValBuilder::simplifySVal(ProgramStateRef State, SVal V) {
       return cache(Sym, SVB.makeSymbolVal(Sym));
     }
 
+    SVal getConst(SymbolRef Sym) {
+      const llvm::APSInt *Const =
+          State->getConstraintManager().getSymVal(State, Sym);
+      if (Const)
+        return Loc::isLocType(Sym->getType()) ? (SVal)SVB.makeIntLocVal(*Const)
+                                            : (SVal)SVB.makeIntVal(*Const);
+      return SVal();
+    }
+
   public:
     Simplifier(ProgramStateRef State)
         : State(State), SVB(State->getStateManager().getSValBuilder()) {}
@@ -1152,15 +1160,16 @@ SVal SimpleSValBuilder::simplifySVal(ProgramStateRef State, SVal V) {
       return SVB.makeSymbolVal(S);
     }
 
-    // TODO: Support SymbolCast. Support IntSymExpr when/if we actually
-    // start producing them.
+    // TODO: Support SymbolCast.
 
     SVal VisitSymIntExpr(const SymIntExpr *S) {
       auto I = Cached.find(S);
       if (I != Cached.end())
         return I->second;
 
-      SVal LHS = Visit(S->getLHS());
+      SVal LHS = getConst(S->getLHS());
+      if (LHS.isUndef())
+        LHS = Visit(S->getLHS());
       if (isUnchanged(S->getLHS(), LHS))
         return skip(S);
 
@@ -1187,6 +1196,22 @@ SVal SimpleSValBuilder::simplifySVal(ProgramStateRef State, SVal V) {
           S, SVB.evalBinOp(State, S->getOpcode(), LHS, RHS, S->getType()));
     }
 
+    SVal VisitIntSymExpr(const IntSymExpr *S) {
+      auto I = Cached.find(S);
+      if (I != Cached.end())
+        return I->second;
+
+      SVal RHS = getConst(S->getRHS());
+      if (RHS.isUndef())
+        RHS = Visit(S->getRHS());
+      if (isUnchanged(S->getRHS(), RHS))
+        return skip(S);
+
+      SVal LHS = SVB.makeIntVal(S->getLHS());
+      return cache(
+          S, SVB.evalBinOp(State, S->getOpcode(), LHS, RHS, S->getType()));
+    }
+
     SVal VisitSymSymExpr(const SymSymExpr *S) {
       auto I = Cached.find(S);
       if (I != Cached.end())
@@ -1200,8 +1225,13 @@ SVal SimpleSValBuilder::simplifySVal(ProgramStateRef State, SVal V) {
           Loc::isLocType(S->getRHS()->getType()))
         return skip(S);
 
-      SVal LHS = Visit(S->getLHS());
-      SVal RHS = Visit(S->getRHS());
+      SVal LHS = getConst(S->getLHS());
+      if (LHS.isUndef())
+        LHS = Visit(S->getLHS());
+      SVal RHS = getConst(S->getRHS());
+      if (RHS.isUndef())
+        RHS = Visit(S->getRHS());
+
       if (isUnchanged(S->getLHS(), LHS) && isUnchanged(S->getRHS(), RHS))
         return skip(S);
 
