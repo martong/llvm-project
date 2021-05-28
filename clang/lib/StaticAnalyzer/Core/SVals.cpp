@@ -209,14 +209,6 @@ bool SVal::isConstant(int I) const {
   return false;
 }
 
-llvm::Optional<llvm::APSInt> SVal::getConstantValue() const {
-  if (Optional<loc::ConcreteInt> LV = getAs<loc::ConcreteInt>())
-    return LV->getValue();
-  if (Optional<nonloc::ConcreteInt> NV = getAs<nonloc::ConcreteInt>())
-    return NV->getValue();
-  return llvm::None;
-}
-
 bool SVal::isZeroConstant() const {
   return isConstant(0);
 }
