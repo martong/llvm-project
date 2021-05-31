@@ -515,7 +515,6 @@ REGISTER_MAP_WITH_PROGRAMSTATE(ConstraintRange, EquivalenceClass, RangeSet)
 REGISTER_SET_FACTORY_WITH_PROGRAMSTATE(ClassSet, EquivalenceClass)
 REGISTER_MAP_WITH_PROGRAMSTATE(DisequalityMap, EquivalenceClass, ClassSet)
 
-
 namespace {
 /// This class encapsulates a set of symbols equal to each other.
 ///
@@ -1562,24 +1561,27 @@ private:
     if (!State)
       return nullptr;
 
-    ConstraintMap CM = getConstraintMap(State);
-    for (auto const &C : CM) {
-      const SymbolRef &ParentSym = C.first;
-      SValBuilder &SVB = getSValBuilder();
+    if (!Constraint.getConcreteValue())
+      return State;
 
-      SVal SimplifiedParentVal =
-          SVB.simplifySVal(State, SVB.makeSymbolVal(ParentSym));
-
-      SymbolRef SimplifiedParentSym = SimplifiedParentVal.getAsSymbol();
-      const RangeSet *ParentConstraint = getConstraint(State, ParentSym);
-      // Set the existing constraint on the newly simplified parent.
-      if (SimplifiedParentSym && ParentConstraint)
-        State = setConstraint(
-            State,
-            EquivalenceClass::find(State, SimplifiedParentVal.getAsSymbol()),
-            *ParentConstraint);
+    // Simplify existing constraints.
+    SValBuilder &SVB = getSValBuilder();
+    ConstraintRangeTy Constraints = State->get<ConstraintRange>();
+    for (std::pair<EquivalenceClass, RangeSet> ClassConstraint : Constraints) {
+      EquivalenceClass Class = ClassConstraint.first;
+      SymbolSet ClassMembers = Class.getClassMembers(State);
+      for (const SymbolRef &MemberSym : ClassMembers) {
+        SVal SimplifiedMemberVal =
+            SVB.simplifySVal(State, SVB.makeSymbolVal(MemberSym));
+        SymbolRef SimplifiedMemberSym = SimplifiedMemberVal.getAsSymbol();
+        if (SimplifiedMemberSym && MemberSym != SimplifiedMemberSym) {
+          // Add the newly simplified symbol to the equivalence class.
+          State =
+              Class.merge(this->getBasicVals(), F, State,
+                          EquivalenceClass::find(State, SimplifiedMemberSym));
+        }
+      }
     }
-
     return State;
   }
 };
