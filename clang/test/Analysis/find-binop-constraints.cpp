@@ -5,6 +5,7 @@
 // RUN:   -verify
 
 void clang_analyzer_eval(bool);
+void clang_analyzer_warnIfReached();
 
 int test_legacy_behavior(int x, int y) {
   if (y != 0)
@@ -112,4 +113,33 @@ int test_binop_when_height_is_2_r(int a, int x, int y, int z) {
 
   }
   return 0;
+}
+
+void test_equivalence_classes_are_updated(int a, int b, int c, int d) {
+  if (a + b != c)
+    return;
+  if (a != d)
+    return;
+  if (b != 0)
+    return;
+  // Keep the symbols and the constraints! alive.
+  (void)(a * b * c * d);
+  clang_analyzer_eval(c == d); // expected-warning{{TRUE}}
+  return;
+}
+
+void test_contradiction(int a, int b, int c, int d) {
+  if (a + b != c)
+    return;
+  if (a == c)
+    return;
+  clang_analyzer_warnIfReached(); // expected-warning{{REACHABLE}}
+
+  // Bring in the contradiction.
+  if (b != 0)
+    return;
+  // Keep the symbols and the constraints! alive.
+  (void)(a * b * c * d);
+  clang_analyzer_warnIfReached(); // no-warning, i.e. UNREACHABLE
+  return;
 }

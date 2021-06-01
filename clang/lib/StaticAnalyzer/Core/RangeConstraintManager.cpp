@@ -20,6 +20,7 @@
 #include "llvm/ADT/FoldingSet.h"
 #include "llvm/ADT/ImmutableSet.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallSet.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
@@ -1553,6 +1554,41 @@ private:
     return State->set<ConstraintRange>(Constraints);
   }
 
+  // Iterate over all symbols in an equivalence class and try to simplify them.
+  // Once a symbol is simplified then we check if we can merge the simplified
+  // symbol's equivalence class to the original class. This way, we simplify the
+  // classes as well: we strive to keep the number of the classes to be the
+  // absolute minimum.
+  LLVM_NODISCARD ProgramStateRef simplifyEquivalenceClass(
+      ProgramStateRef State, EquivalenceClass Class, SymbolSet ClassMembers) {
+    SValBuilder &SVB = getSValBuilder();
+    for (const SymbolRef &MemberSym : ClassMembers) {
+      SVal SimplifiedMemberVal =
+          SVB.simplifySVal(State, SVB.makeSymbolVal(MemberSym));
+      SymbolRef SimplifiedMemberSym = SimplifiedMemberVal.getAsSymbol();
+      if (SimplifiedMemberSym && MemberSym != SimplifiedMemberSym) {
+        ClassSet DisequalClasses = Class.getDisequalClasses(State);
+        EquivalenceClass ClassOfSimplifiedSym =
+            EquivalenceClass::find(State, SimplifiedMemberSym);
+        // We are about to add the newly simplified symbol to the existing
+        // equivalence class, but they are known to be non-equal. This is a
+        // contradiction.
+        if (DisequalClasses.contains(ClassOfSimplifiedSym))
+          return nullptr;
+        // The simplified symbol should be the member of the original Class,
+        // however, it might be in another existing Class at the moment. We
+        // have to merge these classes.
+        State = Class.merge(getBasicVals(), F, State, ClassOfSimplifiedSym);
+        if (!State)
+          return nullptr;
+      }
+    }
+    return State;
+  }
+
+  // Associate a constraint to a symbolic expression. First, we set the
+  // constraint in the State, then we try to simplify existing symbolic
+  // expressions based on the newly set constraint.
   LLVM_NODISCARD inline ProgramStateRef
   setConstraint(ProgramStateRef State, SymbolRef Sym, RangeSet Constraint) {
     assert(State);
@@ -1561,27 +1597,37 @@ private:
     if (!State)
       return nullptr;
 
+    // We have a chance to simplify existing symbolic values if the new
+    // constraint is a constant.
     if (!Constraint.getConcreteValue())
       return State;
 
-    // Simplify existing constraints.
-    SValBuilder &SVB = getSValBuilder();
+    llvm::SmallSet<EquivalenceClass, 4> SimplifiedClasses;
+    // Iterate over all equivalence classes and try to simplify them.
+    ClassMembersTy Members = State->get<ClassMembers>();
+    for (std::pair<EquivalenceClass, SymbolSet> ClassToSymbolSet : Members) {
+      EquivalenceClass Class = ClassToSymbolSet.first;
+      SymbolSet ClassMembers = ClassToSymbolSet.second;
+      State = simplifyEquivalenceClass(State, Class, ClassMembers);
+      if (!State)
+        return nullptr;
+      SimplifiedClasses.insert(Class);
+    }
+
+    // Trivial equivalence classes (those that have only one symbol member) are
+    // not stored in the State. Thus, we must skim through the constraints as
+    // well. And we try to simplify symbols in the constraints.
     ConstraintRangeTy Constraints = State->get<ConstraintRange>();
     for (std::pair<EquivalenceClass, RangeSet> ClassConstraint : Constraints) {
       EquivalenceClass Class = ClassConstraint.first;
+      if (SimplifiedClasses.count(Class)) // Already simplified.
+        continue;
       SymbolSet ClassMembers = Class.getClassMembers(State);
-      for (const SymbolRef &MemberSym : ClassMembers) {
-        SVal SimplifiedMemberVal =
-            SVB.simplifySVal(State, SVB.makeSymbolVal(MemberSym));
-        SymbolRef SimplifiedMemberSym = SimplifiedMemberVal.getAsSymbol();
-        if (SimplifiedMemberSym && MemberSym != SimplifiedMemberSym) {
-          // Add the newly simplified symbol to the equivalence class.
-          State =
-              Class.merge(this->getBasicVals(), F, State,
-                          EquivalenceClass::find(State, SimplifiedMemberSym));
-        }
-      }
+      State = simplifyEquivalenceClass(State, Class, ClassMembers);
+      if (!State)
+        return nullptr;
     }
+
     return State;
   }
 };
