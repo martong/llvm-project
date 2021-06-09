@@ -1386,6 +1386,12 @@ RangeSet SymbolicRangeInferrer::VisitBinaryOperator<BO_Rem>(Range LHS,
 //                  Constraint manager implementation details
 //===----------------------------------------------------------------------===//
 
+static SymbolRef simplify(ProgramStateRef State, SymbolRef Sym) {
+  SValBuilder &SVB = State->getStateManager().getSValBuilder();
+  SVal SimplifiedVal = SVB.simplifySVal(State, SVB.makeSymbolVal(Sym));
+  return SimplifiedVal.getAsSymbol();
+}
+
 class RangeConstraintManager : public RangedConstraintManager {
 public:
   RangeConstraintManager(ExprEngine *EE, SValBuilder &SVB)
@@ -1499,6 +1505,9 @@ private:
       // This is an infeasible assumption.
       return nullptr;
 
+    if (SymbolRef SimplifiedSym = simplify(State, Sym))
+      Sym = SimplifiedSym;
+
     if (ProgramStateRef NewState = setConstraint(State, Sym, NewConstraint)) {
       if (auto Equality = EqualityInfo::extract(Sym, Int, Adjustment)) {
         // If the original assumption is not Sym + Adjustment !=/</> Int,
@@ -1586,7 +1595,6 @@ private:
     ClassMembersTy Members = State->get<ClassMembers>();
     for (std::pair<EquivalenceClass, SymbolSet> ClassToSymbolSet : Members) {
       EquivalenceClass Class = ClassToSymbolSet.first;
-      SymbolSet ClassMembers = ClassToSymbolSet.second;
       State = Class.simplify(getSValBuilder(), F, State);
       if (!State)
         return nullptr;
@@ -1601,7 +1609,6 @@ private:
       EquivalenceClass Class = ClassConstraint.first;
       if (SimplifiedClasses.count(Class)) // Already simplified.
         continue;
-      SymbolSet ClassMembers = Class.getClassMembers(State);
       State = Class.simplify(getSValBuilder(), F, State);
       if (!State)
         return nullptr;
@@ -1776,6 +1783,10 @@ EquivalenceClass::mergeImpl(BasicValueFactory &ValueFactory,
 
   // 4. Update disequality relations
   ClassSet DisequalToOther = Other.getDisequalClasses(DisequalityInfo, CF);
+  // We are about to merge two classes but they are already known to be
+  // non-equal. This is a contradiction.
+  if (DisequalToOther.contains(*this))
+    return nullptr;
   if (!DisequalToOther.isEmpty()) {
     ClassSet DisequalToThis = getDisequalClasses(DisequalityInfo, CF);
     DisequalityInfo = DF.remove(DisequalityInfo, Other);
@@ -1958,9 +1969,7 @@ LLVM_NODISCARD ProgramStateRef EquivalenceClass::simplify(
     SValBuilder &SVB, RangeSet::Factory &F, ProgramStateRef State) {
   SymbolSet ClassMembers = getClassMembers(State);
   for (const SymbolRef &MemberSym : ClassMembers) {
-    SVal SimplifiedMemberVal =
-        SVB.simplifySVal(State, SVB.makeSymbolVal(MemberSym));
-    SymbolRef SimplifiedMemberSym = SimplifiedMemberVal.getAsSymbol();
+    SymbolRef SimplifiedMemberSym = ::simplify(State, MemberSym);
     if (SimplifiedMemberSym && MemberSym != SimplifiedMemberSym) {
       EquivalenceClass ClassOfSimplifiedSym =
           EquivalenceClass::find(State, SimplifiedMemberSym);

@@ -122,9 +122,9 @@ void test_equivalence_classes_are_updated(int a, int b, int c, int d) {
     return;
   if (b != 0)
     return;
+  clang_analyzer_eval(c == d); // expected-warning{{TRUE}}
   // Keep the symbols and the constraints! alive.
   (void)(a * b * c * d);
-  clang_analyzer_eval(c == d); // expected-warning{{TRUE}}
   return;
 }
 
@@ -138,8 +138,26 @@ void test_contradiction(int a, int b, int c, int d) {
   // Bring in the contradiction.
   if (b != 0)
     return;
+  clang_analyzer_warnIfReached(); // no-warning, i.e. UNREACHABLE
   // Keep the symbols and the constraints! alive.
   (void)(a * b * c * d);
-  clang_analyzer_warnIfReached(); // no-warning, i.e. UNREACHABLE
   return;
+}
+
+void test_deferred_contradiction(int e0, int b0, int b1) {
+
+  int e1 = e0 - b0; // e1 is bound to (reg_$0<int e0>) - (reg_$1<int b0>)
+  (void)(b0 == 2);
+
+  int e2 = e1 - b1;
+  if (e2 > 0) { // b1 != e1
+    clang_analyzer_warnIfReached();   // expected-warning{{REACHABLE}}
+    // Here, e1 is still bound to (reg_$0<int e0>) - (reg_$1<int b0>) but we
+    // should be able to simplify it to (reg_$0<int e0>) - 2 and thus realize
+    // the contradiction.
+    if (b1 == e1) {
+      clang_analyzer_warnIfReached(); // no-warning, i.e. UNREACHABLE
+      (void)(b0 * b1 * e0 * e1 * e2);
+    }
+  }
 }
