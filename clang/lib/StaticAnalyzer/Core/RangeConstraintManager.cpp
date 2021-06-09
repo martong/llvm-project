@@ -588,9 +588,6 @@ public:
   LLVM_NODISCARD static inline Optional<bool>
   areEqual(ProgramStateRef State, SymbolRef First, SymbolRef Second);
 
-  LLVM_NODISCARD inline Optional<bool> isEqualTo(ProgramStateRef State,
-                                                 EquivalenceClass Other) const;
-
   /// Iterate over all symbols and try to simplify them.
   LLVM_NODISCARD ProgramStateRef simplify(SValBuilder &SVB,
                                           RangeSet::Factory &F,
@@ -1787,6 +1784,7 @@ EquivalenceClass::mergeImpl(BasicValueFactory &ValueFactory,
   // non-equal. This is a contradiction.
   if (DisequalToOther.contains(*this))
     return nullptr;
+
   if (!DisequalToOther.isEmpty()) {
     ClassSet DisequalToThis = getDisequalClasses(DisequalityInfo, CF);
     DisequalityInfo = DF.remove(DisequalityInfo, Other);
@@ -1954,12 +1952,6 @@ inline Optional<bool> EquivalenceClass::areEqual(ProgramStateRef State,
   return llvm::None;
 }
 
-LLVM_NODISCARD inline Optional<bool>
-EquivalenceClass::isEqualTo(ProgramStateRef State,
-                            EquivalenceClass Other) const {
-  return EquivalenceClass::areEqual(State, *this, Other);
-}
-
 // Iterate over all symbols and try to simplify them. Once a symbol is
 // simplified then we check if we can merge the simplified symbol's equivalence
 // class to the this class. This way, we simplify not just the symbols but the
@@ -1973,17 +1965,6 @@ LLVM_NODISCARD ProgramStateRef EquivalenceClass::simplify(
     if (SimplifiedMemberSym && MemberSym != SimplifiedMemberSym) {
       EquivalenceClass ClassOfSimplifiedSym =
           EquivalenceClass::find(State, SimplifiedMemberSym);
-      Optional<bool> KnownClassEquality =
-          isEqualTo(State, ClassOfSimplifiedSym);
-      if (KnownClassEquality) {
-        // The classes are already equal, there is no need to merge.
-        if (*KnownClassEquality == true)
-          continue;
-        // We are about to add the newly simplified symbol to this equivalence
-        // class, but they are known to be non-equal. This is a contradiction.
-        if (*KnownClassEquality == false)
-          return nullptr;
-      }
       // The simplified symbol should be the member of the original Class,
       // however, it might be in another existing class at the moment. We
       // have to merge these classes.
