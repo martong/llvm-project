@@ -1519,9 +1519,6 @@ private:
       // This is an infeasible assumption.
       return nullptr;
 
-    if (SymbolRef SimplifiedSym = simplify(State, Sym))
-      Sym = SimplifiedSym;
-
     if (ProgramStateRef NewState = setConstraint(State, Sym, NewConstraint)) {
       if (auto Equality = EqualityInfo::extract(Sym, Int, Adjustment)) {
         // If the original assumption is not Sym + Adjustment !=/</> Int,
@@ -2314,6 +2311,9 @@ RangeConstraintManager::assumeSymNE(ProgramStateRef St, SymbolRef Sym,
 
   llvm::APSInt Point = AdjustmentType.convert(Int) - Adjustment;
 
+  if (SymbolRef SimplifiedSym = simplify(St, Sym))
+    Sym = SimplifiedSym;
+
   RangeSet New = getRange(St, Sym);
   New = F.deletePoint(New, Point);
 
@@ -2331,6 +2331,10 @@ RangeConstraintManager::assumeSymEQ(ProgramStateRef St, SymbolRef Sym,
 
   // [Int-Adjustment, Int-Adjustment]
   llvm::APSInt AdjInt = AdjustmentType.convert(Int) - Adjustment;
+
+  if (SymbolRef SimplifiedSym = simplify(St, Sym))
+    Sym = SimplifiedSym;
+
   RangeSet New = getRange(St, Sym);
   New = F.intersect(New, AdjInt);
 
@@ -2370,6 +2374,8 @@ ProgramStateRef
 RangeConstraintManager::assumeSymLT(ProgramStateRef St, SymbolRef Sym,
                                     const llvm::APSInt &Int,
                                     const llvm::APSInt &Adjustment) {
+  if (SymbolRef SimplifiedSym = simplify(St, Sym))
+    Sym = SimplifiedSym;
   RangeSet New = getSymLTRange(St, Sym, Int, Adjustment);
   return trackNE(New, St, Sym, Int, Adjustment);
 }
@@ -2407,6 +2413,8 @@ ProgramStateRef
 RangeConstraintManager::assumeSymGT(ProgramStateRef St, SymbolRef Sym,
                                     const llvm::APSInt &Int,
                                     const llvm::APSInt &Adjustment) {
+  if (SymbolRef SimplifiedSym = simplify(St, Sym))
+    Sym = SimplifiedSym;
   RangeSet New = getSymGTRange(St, Sym, Int, Adjustment);
   return trackNE(New, St, Sym, Int, Adjustment);
 }
