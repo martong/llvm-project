@@ -2580,7 +2580,7 @@ void RangeConstraintManager::printEquivalenceClasses(raw_ostream &Out,
     return;
   }
 
-  llvm::SmallSet<std::string, 8> MembersStr;
+  std::set<std::string> MembersStr;
   for (std::pair<EquivalenceClass, SymbolSet> ClassToSymbolSet : Members)
     MembersStr.insert(toString(State, ClassToSymbolSet.first));
 
@@ -2618,7 +2618,7 @@ void RangeConstraintManager::printDisequalities(raw_ostream &Out,
 
   // Transform the disequality info to an ordered map of
   // [string -> (ordered set of strings)]
-  using EqClassesStrTy = llvm::SmallSet<std::string, 8>;
+  using EqClassesStrTy = std::set<std::string>;
   using DisequalityInfoStrTy = std::map<std::string, EqClassesStrTy>;
   DisequalityInfoStrTy DisequalityInfoStr;
   for (std::pair<EquivalenceClass, ClassSet> ClassToDisEqSet : Disequalities) {
