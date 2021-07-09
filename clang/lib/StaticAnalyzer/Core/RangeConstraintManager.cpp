@@ -1593,29 +1593,35 @@ private:
     if (!Constraint.getConcreteValue())
       return State;
 
-    llvm::SmallSet<EquivalenceClass, 4> SimplifiedClasses;
-    // Iterate over all equivalence classes and try to simplify them.
-    ClassMembersTy Members = State->get<ClassMembers>();
-    for (std::pair<EquivalenceClass, SymbolSet> ClassToSymbolSet : Members) {
-      EquivalenceClass Class = ClassToSymbolSet.first;
-      State = Class.simplify(getSValBuilder(), F, State);
-      if (!State)
-        return nullptr;
-      SimplifiedClasses.insert(Class);
-    }
 
-    // Trivial equivalence classes (those that have only one symbol member) are
-    // not stored in the State. Thus, we must skim through the constraints as
-    // well. And we try to simplify symbols in the constraints.
-    ConstraintRangeTy Constraints = State->get<ConstraintRange>();
-    for (std::pair<EquivalenceClass, RangeSet> ClassConstraint : Constraints) {
-      EquivalenceClass Class = ClassConstraint.first;
-      if (SimplifiedClasses.count(Class)) // Already simplified.
-        continue;
-      State = Class.simplify(getSValBuilder(), F, State);
-      if (!State)
-        return nullptr;
-    }
+    ProgramStateRef OldState;
+    do {
+      OldState = State;
+
+      llvm::SmallSet<EquivalenceClass, 4> SimplifiedClasses;
+      // Iterate over all equivalence classes and try to simplify them.
+      ClassMembersTy Members = State->get<ClassMembers>();
+      for (std::pair<EquivalenceClass, SymbolSet> ClassToSymbolSet : Members) {
+        EquivalenceClass Class = ClassToSymbolSet.first;
+        State = Class.simplify(getSValBuilder(), F, State);
+        if (!State)
+          return nullptr;
+        SimplifiedClasses.insert(Class);
+      }
+
+      // Trivial equivalence classes (those that have only one symbol member) are
+      // not stored in the State. Thus, we must skim through the constraints as
+      // well. And we try to simplify symbols in the constraints.
+      ConstraintRangeTy Constraints = State->get<ConstraintRange>();
+      for (std::pair<EquivalenceClass, RangeSet> ClassConstraint : Constraints) {
+        EquivalenceClass Class = ClassConstraint.first;
+        if (SimplifiedClasses.count(Class)) // Already simplified.
+          continue;
+        State = Class.simplify(getSValBuilder(), F, State);
+        if (!State)
+          return nullptr;
+      }
+    } while (State != OldState);
 
     return State;
   }
