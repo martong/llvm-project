@@ -2002,7 +2002,7 @@ LLVM_NODISCARD ProgramStateRef EquivalenceClass::remove(ProgramStateRef State,
   ClassMapTy::Factory &CMF = State->get_context<ClassMap>();
 
   SymbolSet ClsMembers = getClassMembers(State);
-  assert(ClsMembers.getHeight() > 1);
+  assert(ClsMembers.getHeight() > 1 && "Class should have at least two members");
   // Remove old Sym->Class relations.
   for (SymbolRef Sym : ClsMembers)
     Classes = CMF.remove(Classes, Sym);

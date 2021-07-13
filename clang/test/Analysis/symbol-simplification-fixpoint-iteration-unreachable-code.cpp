@@ -12,8 +12,8 @@ void clang_analyzer_warnIfReached();
 void test_contradiction(int a, int b, int c, int d, int x) {
   if (a + b + c != d)
     return;
-  //if (a == d)
-    //return;
+  if (a == d)
+    return;
   if (c + b != 0)
     return;
   clang_analyzer_warnIfReached(); // expected-warning{{REACHABLE}}
@@ -42,6 +42,6 @@ void test_contradiction(int a, int b, int c, int d, int x) {
     return;
 
   // Keep the symbols and the constraints! alive.
-  (void)(a * b * c * d);
+  (void)(a * b * c * d * x);
   return;
 }
