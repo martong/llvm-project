@@ -599,6 +599,14 @@ public:
     dumpToStream(State, llvm::errs());
   }
 
+  LLVM_NODISCARD ProgramStateRef simplifyTrivial(ProgramStateRef Statej);
+  LLVM_NODISCARD ProgramStateRef replaceTrivial(ProgramStateRef State,
+                                                const SymbolRef Old,
+                                                const SymbolRef New);
+  LLVM_NODISCARD ProgramStateRef remove(ProgramStateRef State,
+                                        const SymbolRef Old,
+                                        const SymbolRef New);
+
   /// Check equivalence data for consistency.
   LLVM_NODISCARD LLVM_ATTRIBUTE_UNUSED static bool
   isClassDataConsistent(ProgramStateRef State);
@@ -1593,12 +1601,10 @@ private:
     if (!Constraint.getConcreteValue())
       return State;
 
-
     ProgramStateRef OldState;
     do {
       OldState = State;
 
-      llvm::SmallSet<EquivalenceClass, 4> SimplifiedClasses;
       // Iterate over all equivalence classes and try to simplify them.
       ClassMembersTy Members = State->get<ClassMembers>();
       for (std::pair<EquivalenceClass, SymbolSet> ClassToSymbolSet : Members) {
@@ -1606,7 +1612,6 @@ private:
         State = Class.simplify(getSValBuilder(), F, State);
         if (!State)
           return nullptr;
-        SimplifiedClasses.insert(Class);
       }
 
       // Trivial equivalence classes (those that have only one symbol member) are
@@ -1615,11 +1620,11 @@ private:
       ConstraintRangeTy Constraints = State->get<ConstraintRange>();
       for (std::pair<EquivalenceClass, RangeSet> ClassConstraint : Constraints) {
         EquivalenceClass Class = ClassConstraint.first;
-        if (SimplifiedClasses.count(Class)) // Already simplified.
-          continue;
-        State = Class.simplify(getSValBuilder(), F, State);
-        if (!State)
-          return nullptr;
+        if (Class.isTrivial(State)) {
+          State = Class.simplifyTrivial(State);
+          if (!State)
+            return nullptr;
+        }
       }
     } while (State != OldState);
 
@@ -1973,6 +1978,76 @@ inline Optional<bool> EquivalenceClass::areEqual(ProgramStateRef State,
   return llvm::None;
 }
 
+LLVM_NODISCARD ProgramStateRef EquivalenceClass::replaceTrivial(
+    ProgramStateRef State, const SymbolRef Old, const SymbolRef New) {
+  assert(isTrivial(State));
+  ConstraintRangeTy Constraints = State->get<ConstraintRange>();
+  ConstraintRangeTy NewConstraints = Constraints;
+  ConstraintRangeTy::Factory &ConstraintFactory =
+      State->get_context<ConstraintRange>();
+  if (const RangeSet *R = getConstraint(State, Old)) {
+    Constraints = ConstraintFactory.remove(Constraints, Old);
+    Constraints = ConstraintFactory.add(Constraints, New, *R);
+  }
+  State = State->set<ConstraintRange>(Constraints);
+  return State;
+}
+
+LLVM_NODISCARD ProgramStateRef EquivalenceClass::remove(ProgramStateRef State,
+                                                        const SymbolRef Old,
+                                                        const SymbolRef New) {
+
+  ClassMapTy Classes = State->get<ClassMap>();
+  ClassMapTy::Factory &CMF = State->get_context<ClassMap>();
+
+  SymbolSet ClsMembers = getClassMembers(State);
+  assert(ClsMembers.getHeight() > 1);
+  // Remove old Sym->Class relations.
+  for (SymbolRef Sym : ClsMembers)
+    Classes = CMF.remove(Classes, Sym);
+
+  // Remove the Old Sym.
+  SymbolSet::Factory &F = getMembersFactory(State);
+  ClsMembers = F.remove(ClsMembers, Old);
+
+  ClassMembersTy::Factory &ClsMembersFactory =
+      State->get_context<ClassMembers>();
+  ClassMembersTy ClassMembersMap = State->get<ClassMembers>();
+  ClassMembersTy NewClassMembersMap = ClassMembersMap;
+
+  NewClassMembersMap = ClsMembersFactory.remove(NewClassMembersMap, Old);
+  // Overwrite the existing members assigned to this class.
+  NewClassMembersMap =
+      ClsMembersFactory.add(NewClassMembersMap, New, ClsMembers);
+  // Refresh Sym->Class relations.
+  for (SymbolRef Sym : ClsMembers)
+    Classes = CMF.add(Classes, Sym, New);
+
+  // The old Sym could have been the leader of the EQ class (see Profile).
+  ConstraintRangeTy Constraints = State->get<ConstraintRange>();
+  ConstraintRangeTy::Factory &ConstraintFactory =
+      State->get_context<ConstraintRange>();
+  if (const RangeSet *R = getConstraint(State, Old)) {
+    Constraints = ConstraintFactory.remove(Constraints, Old);
+    Constraints = ConstraintFactory.add(Constraints, New, *R);
+  }
+
+  State = State->set<ConstraintRange>(Constraints);
+  State = State->set<ClassMembers>(NewClassMembersMap);
+  State = State->set<ClassMap>(Classes);
+
+  return State;
+}
+
+LLVM_NODISCARD ProgramStateRef
+EquivalenceClass::simplifyTrivial(ProgramStateRef State) {
+  assert(isTrivial(State));
+  SymbolRef MemberSym = getRepresentativeSymbol();
+  SymbolRef SimplifiedMemberSym = ento::simplify(State, MemberSym);
+  State = replaceTrivial(State, MemberSym, SimplifiedMemberSym);
+  return State;
+}
+
 // Iterate over all symbols and try to simplify them. Once a symbol is
 // simplified then we check if we can merge the simplified symbol's equivalence
 // class to this class. This way, we simplify not just the symbols but the
@@ -1980,6 +2055,7 @@ inline Optional<bool> EquivalenceClass::areEqual(ProgramStateRef State,
 // absolute minimum.
 LLVM_NODISCARD ProgramStateRef EquivalenceClass::simplify(
     SValBuilder &SVB, RangeSet::Factory &F, ProgramStateRef State) {
+  assert(!isTrivial(State));
   SymbolSet ClassMembers = getClassMembers(State);
   for (const SymbolRef &MemberSym : ClassMembers) {
     SymbolRef SimplifiedMemberSym = ento::simplify(State, MemberSym);
@@ -1990,6 +2066,7 @@ LLVM_NODISCARD ProgramStateRef EquivalenceClass::simplify(
       // however, it might be in another existing class at the moment. We
       // have to merge these classes.
       State = merge(SVB.getBasicValueFactory(), F, State, ClassOfSimplifiedSym);
+      State = remove(State, MemberSym, SimplifiedMemberSym);
       if (!State)
         return nullptr;
     }

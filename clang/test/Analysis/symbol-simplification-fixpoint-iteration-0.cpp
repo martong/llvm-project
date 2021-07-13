@@ -10,12 +10,9 @@ void clang_analyzer_printState();
 void clang_analyzer_warnIfReached();
 
 void test_contradiction(int a, int b, int c, int d, int x) {
-  if (a + b + c != d)
-    return;
-  if (c + b != 0)
+  if (a + b != c)
     return;
   clang_analyzer_printState();
-
   if (b != 0)
     return;
   clang_analyzer_printState();
