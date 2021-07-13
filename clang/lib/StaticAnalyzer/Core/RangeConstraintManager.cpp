@@ -606,6 +606,9 @@ public:
   LLVM_NODISCARD ProgramStateRef replaceConstraints(ProgramStateRef State,
                                                     const SymbolRef Old,
                                                     const SymbolRef New);
+  LLVM_NODISCARD ProgramStateRef replaceDisequalityInfo(ProgramStateRef State,
+                                                    const SymbolRef Old,
+                                                    const SymbolRef New);
   LLVM_NODISCARD ProgramStateRef remove(ProgramStateRef State,
                                         const SymbolRef Old,
                                         const SymbolRef New);
@@ -1984,14 +1987,40 @@ LLVM_NODISCARD ProgramStateRef EquivalenceClass::replaceConstraints(
   // The Old Sym could have been the leader of the EQ class, thus we have to
   // remove all constraints associated with the EQ class (identified by Old).
   // And we associate the constraint (RangeSet) to New now.
+  EquivalenceClass OldC(find(State, Old)), NewC(find(State, New));
   ConstraintRangeTy Constraints = State->get<ConstraintRange>();
   ConstraintRangeTy::Factory &ConstraintFactory =
       State->get_context<ConstraintRange>();
-  if (const RangeSet *R = getConstraint(State, Old)) {
-    Constraints = ConstraintFactory.remove(Constraints, Old);
-    Constraints = ConstraintFactory.add(Constraints, New, *R);
+  if (const RangeSet *R = getConstraint(State, OldC)) {
+    Constraints = ConstraintFactory.remove(Constraints, OldC);
+    Constraints = ConstraintFactory.add(Constraints, NewC, *R);
   }
   State = State->set<ConstraintRange>(Constraints);
+  return State;
+}
+
+// Refresh disequality info.
+LLVM_NODISCARD ProgramStateRef EquivalenceClass::replaceDisequalityInfo(
+    ProgramStateRef State, const SymbolRef Old, const SymbolRef New) {
+  ClassSet::Factory &CF = State->get_context<ClassSet>();
+  DisequalityMapTy::Factory &DF = State->get_context<DisequalityMap>();
+
+  DisequalityMapTy DisequalityInfo = State->get<DisequalityMap>();
+  EquivalenceClass OldC(find(State, Old)), NewC(find(State, New));
+  ClassSet DisequalToOld = getDisequalClasses(DisequalityInfo, CF);
+  if (!DisequalToOld.isEmpty()) {
+    DisequalityInfo = DF.remove(DisequalityInfo, OldC);
+    DisequalityInfo = DF.add(DisequalityInfo, NewC, DisequalToOld);
+    for (EquivalenceClass DisEqClass : DisequalToOld) {
+      ClassSet ReverseSet = DisEqClass.getDisequalClasses(DisequalityInfo, CF);
+      if (!ReverseSet.isEmpty()) {
+        ReverseSet = CF.remove(ReverseSet, OldC);
+        ReverseSet = CF.add(ReverseSet, NewC);
+        DisequalityInfo = DF.add(DisequalityInfo, DisEqClass, ReverseSet);
+      }
+    }
+    State = State->set<DisequalityMap>(DisequalityInfo);
+  }
   return State;
 }
 
@@ -1999,11 +2028,14 @@ LLVM_NODISCARD ProgramStateRef EquivalenceClass::remove(ProgramStateRef State,
                                                         const SymbolRef Old,
                                                         const SymbolRef New) {
 
-  ClassMapTy Classes = State->get<ClassMap>();
   ClassMapTy::Factory &CMF = State->get_context<ClassMap>();
+
+  ClassMapTy Classes = State->get<ClassMap>();
+  DisequalityMapTy DisequalityInfo = State->get<DisequalityMap>();
 
   SymbolSet ClsMembers = getClassMembers(State);
   assert(ClsMembers.getHeight() > 1 && "Class should have at least two members");
+
   // Remove old Sym->Class relations.
   for (SymbolRef Sym : ClsMembers)
     Classes = CMF.remove(Classes, Sym);
@@ -2025,9 +2057,10 @@ LLVM_NODISCARD ProgramStateRef EquivalenceClass::remove(ProgramStateRef State,
   for (SymbolRef Sym : ClsMembers)
     Classes = CMF.add(Classes, Sym, New);
 
-  State = replaceConstraints(State, Old, New);
   State = State->set<ClassMembers>(NewClassMembersMap);
   State = State->set<ClassMap>(Classes);
+  State = replaceConstraints(State, Old, New);
+  State = replaceDisequalityInfo(State, Old, New);
 
   return State;
 }
@@ -2038,6 +2071,7 @@ EquivalenceClass::simplifyTrivial(ProgramStateRef State) {
   SymbolRef MemberSym = getRepresentativeSymbol();
   SymbolRef SimplifiedMemberSym = ento::simplify(State, MemberSym);
   State = replaceConstraints(State, MemberSym, SimplifiedMemberSym);
+  State = replaceDisequalityInfo(State, MemberSym, SimplifiedMemberSym);
   return State;
 }
 
@@ -2050,12 +2084,14 @@ LLVM_NODISCARD ProgramStateRef EquivalenceClass::simplifyNonTrivial(
     if (SimplifiedMemberSym && MemberSym != SimplifiedMemberSym) {
       EquivalenceClass ClassOfSimplifiedSym =
           EquivalenceClass::find(State, SimplifiedMemberSym);
+
       // The simplified symbol should be the member of the original Class,
       // however, it might be in another existing class at the moment. We
       // have to merge these classes.
       State = merge(SVB.getBasicValueFactory(), F, State, ClassOfSimplifiedSym);
       if (!State)
         return nullptr;
+
       State = remove(State, MemberSym, SimplifiedMemberSym);
       if (!State)
         return nullptr;
