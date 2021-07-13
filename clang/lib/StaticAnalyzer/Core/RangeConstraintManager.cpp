@@ -593,6 +593,9 @@ public:
   LLVM_NODISCARD ProgramStateRef simplify(SValBuilder &SVB,
                                           RangeSet::Factory &F,
                                           ProgramStateRef State);
+  LLVM_NODISCARD ProgramStateRef simplifyNonTrivial(SValBuilder &SVB,
+                                          RangeSet::Factory &F,
+                                          ProgramStateRef State);
 
   void dumpToStream(ProgramStateRef State, raw_ostream &os) const;
   LLVM_DUMP_METHOD void dump(ProgramStateRef State) const {
@@ -1620,11 +1623,9 @@ private:
       ConstraintRangeTy Constraints = State->get<ConstraintRange>();
       for (std::pair<EquivalenceClass, RangeSet> ClassConstraint : Constraints) {
         EquivalenceClass Class = ClassConstraint.first;
-        if (Class.isTrivial(State)) {
-          State = Class.simplifyTrivial(State);
-          if (!State)
-            return nullptr;
-        }
+        State = Class.simplify(getSValBuilder(), F, State);
+        if (!State)
+          return nullptr;
       }
     } while (State != OldState);
 
@@ -2040,12 +2041,7 @@ EquivalenceClass::simplifyTrivial(ProgramStateRef State) {
   return State;
 }
 
-// Iterate over all symbols and try to simplify them. Once a symbol is
-// simplified then we check if we can merge the simplified symbol's equivalence
-// class to this class. This way, we simplify not just the symbols but the
-// classes as well: we strive to keep the number of the classes to be the
-// absolute minimum.
-LLVM_NODISCARD ProgramStateRef EquivalenceClass::simplify(
+LLVM_NODISCARD ProgramStateRef EquivalenceClass::simplifyNonTrivial(
     SValBuilder &SVB, RangeSet::Factory &F, ProgramStateRef State) {
   assert(!isTrivial(State));
   SymbolSet ClassMembers = getClassMembers(State);
@@ -2065,6 +2061,20 @@ LLVM_NODISCARD ProgramStateRef EquivalenceClass::simplify(
         return nullptr;
     }
   }
+  return State;
+}
+
+// Iterate over all symbols and try to simplify them. Once a symbol is
+// simplified then we check if we can merge the simplified symbol's equivalence
+// class to this class. This way, we simplify not just the symbols but the
+// classes as well: we strive to keep the number of the classes to be the
+// absolute minimum.
+LLVM_NODISCARD ProgramStateRef EquivalenceClass::simplify(
+    SValBuilder &SVB, RangeSet::Factory &F, ProgramStateRef State) {
+  if (isTrivial(State))
+    State = simplifyTrivial(State);
+  else
+    State = simplifyNonTrivial(SVB, F, State);
   return State;
 }
 
