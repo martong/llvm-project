@@ -1630,6 +1630,19 @@ private:
         if (!State)
           return nullptr;
       }
+
+      // We may have trivial equivalence classes in the disequality info as
+      // well, and we need to simplify them.
+      DisequalityMapTy DisequalityInfo = State->get<DisequalityMap>();
+      for (std::pair<EquivalenceClass, ClassSet> DisequalityEntry :
+           DisequalityInfo) {
+        EquivalenceClass Class = DisequalityEntry.first;
+        ClassSet DisequalClasses = DisequalityEntry.second;
+        State = Class.simplify(getSValBuilder(), F, State);
+        if (!State)
+          return nullptr;
+      }
+
     } while (State != OldState);
 
     return State;
