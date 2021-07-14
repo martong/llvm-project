@@ -642,7 +642,7 @@ public:
   void Profile(llvm::FoldingSetNodeID &ID) const { Profile(ID, this->ID); }
 
 private:
-  /* implicit */ EquivalenceClass(SymbolRef Sym)
+  explicit EquivalenceClass(SymbolRef Sym)
       : ID(reinterpret_cast<uintptr_t>(Sym)) {}
 
   /// This function is intended to be used ONLY within the class.
@@ -1684,7 +1684,7 @@ inline EquivalenceClass EquivalenceClass::find(ProgramStateRef State,
     return *NontrivialClass;
 
   // This is a trivial class of Sym.
-  return Sym;
+  return EquivalenceClass(Sym);
 }
 
 inline ProgramStateRef EquivalenceClass::merge(BasicValueFactory &BV,
@@ -2029,6 +2029,8 @@ LLVM_NODISCARD ProgramStateRef EquivalenceClass::remove(ProgramStateRef State,
                                                         const SymbolRef New) {
 
   ClassMapTy::Factory &CMF = State->get_context<ClassMap>();
+  SymbolSet::Factory &F = getMembersFactory(State);
+  ClassMembersTy::Factory &EMFactory = State->get_context<ClassMembers>();
 
   ClassMapTy Classes = State->get<ClassMap>();
   DisequalityMapTy DisequalityInfo = State->get<DisequalityMap>();
@@ -2041,21 +2043,20 @@ LLVM_NODISCARD ProgramStateRef EquivalenceClass::remove(ProgramStateRef State,
     Classes = CMF.remove(Classes, Sym);
 
   // Remove the Old Sym from the members.
-  SymbolSet::Factory &F = getMembersFactory(State);
   ClsMembers = F.remove(ClsMembers, Old);
 
+  EquivalenceClass OldC(find(State, Old)), NewC(find(State, New));
+
   // Overwrite the existing members assigned to this class.
-  ClassMembersTy::Factory &ClsMembersFactory =
-      State->get_context<ClassMembers>();
   ClassMembersTy ClassMembersMap = State->get<ClassMembers>();
   ClassMembersTy NewClassMembersMap = ClassMembersMap;
-  NewClassMembersMap = ClsMembersFactory.remove(NewClassMembersMap, Old);
+  NewClassMembersMap = EMFactory.remove(NewClassMembersMap, OldC);
   NewClassMembersMap =
-      ClsMembersFactory.add(NewClassMembersMap, New, ClsMembers);
+      EMFactory.add(NewClassMembersMap, NewC, ClsMembers);
 
   // Refresh Sym->Class relations.
   for (SymbolRef Sym : ClsMembers)
-    Classes = CMF.add(Classes, Sym, New);
+    Classes = CMF.add(Classes, Sym, NewC);
 
   State = State->set<ClassMembers>(NewClassMembersMap);
   State = State->set<ClassMap>(Classes);
