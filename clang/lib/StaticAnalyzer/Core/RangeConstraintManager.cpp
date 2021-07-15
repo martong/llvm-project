@@ -592,6 +592,16 @@ public:
                                           RangeSet::Factory &F,
                                           ProgramStateRef State);
 
+  /// Associate new members to the class. This may result in changing the
+  /// representative symbol or downgrading from non-trivial to trivial.
+  LLVM_NODISCARD ProgramStateRef setNewMembers(SymbolSet NewMembers,
+                                               ProgramStateRef State);
+
+  // Remove an already empty class amongs the constraints and the disequality
+  // info.
+  LLVM_NODISCARD static ProgramStateRef removeEmpty(ProgramStateRef State,
+                                                    EquivalenceClass Class);
+
   void dumpToStream(ProgramStateRef State, raw_ostream &os) const;
   LLVM_DUMP_METHOD void dump(ProgramStateRef State) const {
     dumpToStream(State, llvm::errs());
@@ -646,6 +656,21 @@ private:
   addToDisequalityInfo(DisequalityMapTy &Info, ConstraintRangeTy &Constraints,
                        RangeSet::Factory &F, ProgramStateRef State,
                        EquivalenceClass First, EquivalenceClass Second);
+
+  /// Returns a new representative symbol if the old representative symbol is
+  /// not amongst the new members.
+  Optional<SymbolRef> isRepresentativeSymbolChanged(SymbolSet NewMembers,
+                                                    ProgramStateRef State);
+
+  // Re-key constraints with Old->New.
+  LLVM_NODISCARD static ProgramStateRef
+  replaceConstraints(ProgramStateRef State, const SymbolRef Old,
+                     const SymbolRef New);
+
+  // Re-key disequality info with Old->New.
+  LLVM_NODISCARD static ProgramStateRef
+  replaceDisequalityInfo(ProgramStateRef State, const SymbolRef Old,
+                         const SymbolRef New);
 
   /// This is a unique identifier of the class.
   uintptr_t ID;
@@ -2097,6 +2122,150 @@ LLVM_NODISCARD ProgramStateRef EquivalenceClass::simplify(
   return State;
 }
 
+LLVM_NODISCARD ProgramStateRef EquivalenceClass::replaceConstraints(
+    ProgramStateRef State, const SymbolRef Old, const SymbolRef New) {
+  assert(Old != New);
+
+  ConstraintRangeTy Constraints = State->get<ConstraintRange>();
+  ConstraintRangeTy::Factory &ConstraintFactory =
+      State->get_context<ConstraintRange>();
+  if (const RangeSet *R = getConstraint(State, Old)) {
+    Constraints = ConstraintFactory.remove(Constraints, Old);
+    Constraints = ConstraintFactory.add(Constraints, New, *R);
+  }
+  State = State->set<ConstraintRange>(Constraints);
+  return State;
+}
+
+LLVM_NODISCARD ProgramStateRef EquivalenceClass::replaceDisequalityInfo(
+    ProgramStateRef State, const SymbolRef Old, const SymbolRef New) {
+  assert(Old != New);
+
+  ClassSet::Factory &CF = State->get_context<ClassSet>();
+  DisequalityMapTy::Factory &DF = State->get_context<DisequalityMap>();
+
+  DisequalityMapTy DisequalityInfo = State->get<DisequalityMap>();
+  ClassSet DisequalToOld =
+      EquivalenceClass(Old).getDisequalClasses(DisequalityInfo, CF);
+  if (!DisequalToOld.isEmpty()) {
+    DisequalityInfo = DF.remove(DisequalityInfo, Old);
+    DisequalityInfo = DF.add(DisequalityInfo, New, DisequalToOld);
+    for (EquivalenceClass DisEqClass : DisequalToOld) {
+      ClassSet ReverseSet = DisEqClass.getDisequalClasses(DisequalityInfo, CF);
+      if (!ReverseSet.isEmpty()) {
+        ReverseSet = CF.remove(ReverseSet, Old);
+        ReverseSet = CF.add(ReverseSet, New);
+        DisequalityInfo = DF.add(DisequalityInfo, DisEqClass, ReverseSet);
+      }
+    }
+    State = State->set<DisequalityMap>(DisequalityInfo);
+  }
+  return State;
+}
+
+Optional<SymbolRef>
+EquivalenceClass::isRepresentativeSymbolChanged(SymbolSet NewMembers,
+                                                ProgramStateRef State) {
+  assert(!NewMembers.isEmpty());
+  SymbolRef CurrentRepr = this->getRepresentativeSymbol();
+  // Existing representative is still good.
+  if (NewMembers.contains(CurrentRepr))
+    return None;
+  return *NewMembers.begin();
+}
+
+LLVM_NODISCARD ProgramStateRef
+EquivalenceClass::removeEmpty(ProgramStateRef State, EquivalenceClass Class) {
+  assert(State->get<ClassMembers>(Class) == nullptr);
+
+  ConstraintRangeTy::Factory &ConstraintFactory =
+      State->get_context<ConstraintRange>();
+  ConstraintRangeTy Constraints = State->get<ConstraintRange>();
+
+  DisequalityMapTy Disequalities = State->get<DisequalityMap>();
+  DisequalityMapTy::Factory &DisequalityFactory =
+      State->get_context<DisequalityMap>();
+  ClassSet::Factory &ClassSetFactory = State->get_context<ClassSet>();
+
+  // Remove associated constraint ranges.
+  Constraints = ConstraintFactory.remove(Constraints, Class);
+
+  // Update disequality information to not hold any information on the
+  // removed class.
+  ClassSet DisequalClasses =
+      Class.getDisequalClasses(Disequalities, ClassSetFactory);
+  if (!DisequalClasses.isEmpty()) {
+    for (EquivalenceClass DisequalClass : DisequalClasses) {
+      ClassSet DisequalToDisequalSet =
+          DisequalClass.getDisequalClasses(Disequalities, ClassSetFactory);
+      // DisequalToDisequalSet is guaranteed to be non-empty for consistent
+      // disequality info.
+      assert(!DisequalToDisequalSet.isEmpty());
+      ClassSet NewSet = ClassSetFactory.remove(DisequalToDisequalSet, Class);
+
+      // No need in keeping an empty set.
+      if (NewSet.isEmpty()) {
+        Disequalities = DisequalityFactory.remove(Disequalities, DisequalClass);
+      } else {
+        Disequalities =
+            DisequalityFactory.add(Disequalities, DisequalClass, NewSet);
+      }
+    }
+    // Remove the data for the class
+    Disequalities = DisequalityFactory.remove(Disequalities, Class);
+  }
+  State = State->set<ConstraintRange>(Constraints);
+  State = State->set<DisequalityMap>(Disequalities);
+  return State;
+}
+
+LLVM_NODISCARD ProgramStateRef
+EquivalenceClass::setNewMembers(SymbolSet NewMembers, ProgramStateRef State) {
+
+  assert(!this->isTrivial(State));
+  SymbolSet OldMembers = this->getClassMembers(State);
+  // Must have at least two members currently.
+  assert(OldMembers.getHeight() > 1);
+
+  ClassMembersTy::Factory &EMFactory = State->get_context<ClassMembers>();
+  ClassMapTy::Factory &CMF = State->get_context<ClassMap>();
+
+  ClassMembersTy ClassMembersMap = State->get<ClassMembers>();
+  ClassMapTy Classes = State->get<ClassMap>();
+
+  // Downgrade to trivial.
+  if (NewMembers.getHeight() <= 1) {
+    // Remove from ClassMap and ClassMembers.
+    ClassMembersMap = EMFactory.remove(ClassMembersMap, *this);
+    // Remove Old->Class relations.
+    for (SymbolRef Old : OldMembers)
+      Classes = CMF.remove(Classes, Old);
+  } else { // The Class is still nontrivial.
+    // Update fwd/backwd relations in ClassMap/ClassMembers.
+    ClassMembersMap = EMFactory.add(ClassMembersMap, *this, NewMembers);
+    // Remove Old->Class relations.
+    for (SymbolRef Old : OldMembers)
+      Classes = CMF.remove(Classes, Old);
+    // Add New->Class relations.
+    for (SymbolRef New : NewMembers)
+      Classes = CMF.add(Classes, New, *this);
+  }
+
+  State = State->set<ClassMap>(Classes);
+  State = State->set<ClassMembers>(ClassMembersMap);
+
+  if (NewMembers.getHeight() == 0) {
+    State = removeEmpty(State, *this);
+  } else if (Optional<SymbolRef> NewReprSym =
+                 this->isRepresentativeSymbolChanged(NewMembers, State)) {
+    SymbolRef OldReprSym = this->getRepresentativeSymbol();
+    State = replaceConstraints(State, OldReprSym, *NewReprSym);
+    State = replaceDisequalityInfo(State, OldReprSym, *NewReprSym);
+  }
+
+  return State;
+}
+
 inline ClassSet EquivalenceClass::getDisequalClasses(ProgramStateRef State,
                                                      SymbolRef Sym) {
   return find(State, Sym).getDisequalClasses(State);
@@ -2121,6 +2290,11 @@ bool EquivalenceClass::isClassDataConsistent(ProgramStateRef State) {
   ClassMembersTy Members = State->get<ClassMembers>();
 
   for (std::pair<EquivalenceClass, SymbolSet> ClassMembersPair : Members) {
+    // A class should have at least two members.
+    // A tree with height 0 has 0 element. A tree with height 1 has exactly 1
+    // element. A tree with height 2 can have 2 or 3 elements.
+    if (ClassMembersPair.second.getHeight() <= 1)
+      return false;
     for (SymbolRef Member : ClassMembersPair.second) {
       // Every member of the class should have a mapping back to the class.
       if (find(State, Member) == ClassMembersPair.first) {
@@ -2246,61 +2420,10 @@ ProgramStateRef
 RangeConstraintManager::removeDeadBindings(ProgramStateRef State,
                                            SymbolReaper &SymReaper) {
   ClassMembersTy ClassMembersMap = State->get<ClassMembers>();
-  ClassMembersTy NewClassMembersMap = ClassMembersMap;
-  ClassMembersTy::Factory &EMFactory = State->get_context<ClassMembers>();
   SymbolSet::Factory &SetFactory = State->get_context<SymbolSet>();
-
   ConstraintRangeTy Constraints = State->get<ConstraintRange>();
-  ConstraintRangeTy NewConstraints = Constraints;
-  ConstraintRangeTy::Factory &ConstraintFactory =
-      State->get_context<ConstraintRange>();
-
   ClassMapTy Map = State->get<ClassMap>();
-  ClassMapTy NewMap = Map;
-  ClassMapTy::Factory &ClassFactory = State->get_context<ClassMap>();
-
   DisequalityMapTy Disequalities = State->get<DisequalityMap>();
-  DisequalityMapTy::Factory &DisequalityFactory =
-      State->get_context<DisequalityMap>();
-  ClassSet::Factory &ClassSetFactory = State->get_context<ClassSet>();
-
-  bool ClassMapChanged = false;
-  bool MembersMapChanged = false;
-  bool ConstraintMapChanged = false;
-  bool DisequalitiesChanged = false;
-
-  auto removeDeadClass = [&](EquivalenceClass Class) {
-    // Remove associated constraint ranges.
-    Constraints = ConstraintFactory.remove(Constraints, Class);
-    ConstraintMapChanged = true;
-
-    // Update disequality information to not hold any information on the
-    // removed class.
-    ClassSet DisequalClasses =
-        Class.getDisequalClasses(Disequalities, ClassSetFactory);
-    if (!DisequalClasses.isEmpty()) {
-      for (EquivalenceClass DisequalClass : DisequalClasses) {
-        ClassSet DisequalToDisequalSet =
-            DisequalClass.getDisequalClasses(Disequalities, ClassSetFactory);
-        // DisequalToDisequalSet is guaranteed to be non-empty for consistent
-        // disequality info.
-        assert(!DisequalToDisequalSet.isEmpty());
-        ClassSet NewSet = ClassSetFactory.remove(DisequalToDisequalSet, Class);
-
-        // No need in keeping an empty set.
-        if (NewSet.isEmpty()) {
-          Disequalities =
-              DisequalityFactory.remove(Disequalities, DisequalClass);
-        } else {
-          Disequalities =
-              DisequalityFactory.add(Disequalities, DisequalClass, NewSet);
-        }
-      }
-      // Remove the data for the class
-      Disequalities = DisequalityFactory.remove(Disequalities, Class);
-      DisequalitiesChanged = true;
-    }
-  };
 
   // 1. Let's see if dead symbols are trivial and have associated constraints.
   for (std::pair<EquivalenceClass, RangeSet> ClassConstraintPair :
@@ -2308,17 +2431,7 @@ RangeConstraintManager::removeDeadBindings(ProgramStateRef State,
     EquivalenceClass Class = ClassConstraintPair.first;
     if (Class.isTriviallyDead(State, SymReaper)) {
       // If this class is trivial, we can remove its constraints right away.
-      removeDeadClass(Class);
-    }
-  }
-
-  // 2. We don't need to track classes for dead symbols.
-  for (std::pair<SymbolRef, EquivalenceClass> SymbolClassPair : Map) {
-    SymbolRef Sym = SymbolClassPair.first;
-
-    if (SymReaper.isDead(Sym)) {
-      ClassMapChanged = true;
-      NewMap = ClassFactory.remove(NewMap, Sym);
+      State = EquivalenceClass::removeEmpty(State, Class);
     }
   }
 
@@ -2330,6 +2443,7 @@ RangeConstraintManager::removeDeadBindings(ProgramStateRef State,
     SymbolSet LiveMembers = ClassMembersPair.second;
     bool MembersChanged = false;
 
+    assert(ClassMembersPair.second.getHeight() > 1);
     for (SymbolRef Member : ClassMembersPair.second) {
       if (SymReaper.isDead(Member)) {
         MembersChanged = true;
@@ -2341,35 +2455,8 @@ RangeConstraintManager::removeDeadBindings(ProgramStateRef State,
     if (!MembersChanged)
       continue;
 
-    MembersMapChanged = true;
-
-    if (LiveMembers.isEmpty()) {
-      // The class is dead now, we need to wipe it out of the members map...
-      NewClassMembersMap = EMFactory.remove(NewClassMembersMap, Class);
-
-      // ...and remove all of its constraints.
-      removeDeadClass(Class);
-    } else {
-      // We need to change the members associated with the class.
-      NewClassMembersMap =
-          EMFactory.add(NewClassMembersMap, Class, LiveMembers);
-    }
+    State = Class.setNewMembers(LiveMembers, State);
   }
-
-  // 4. Update the state with new maps.
-  //
-  // Here we try to be humble and update a map only if it really changed.
-  if (ClassMapChanged)
-    State = State->set<ClassMap>(NewMap);
-
-  if (MembersMapChanged)
-    State = State->set<ClassMembers>(NewClassMembersMap);
-
-  if (ConstraintMapChanged)
-    State = State->set<ConstraintRange>(Constraints);
-
-  if (DisequalitiesChanged)
-    State = State->set<DisequalityMap>(Disequalities);
 
   assert(EquivalenceClass::isClassDataConsistent(State));
 
