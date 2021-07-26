@@ -8,7 +8,7 @@
 
 void clang_analyzer_printState();
 
-void test_contradiction(int a, int b, int c, int d) {
+void test(int a, int b, int c, int d) {
   if (a + b + c != d)
     return;
   if (c + b != 0)
