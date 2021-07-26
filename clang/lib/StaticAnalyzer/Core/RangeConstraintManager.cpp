@@ -605,6 +605,10 @@ public:
                                                         ProgramStateRef State,
                                                         EquivalenceClass Class);
 
+  /// Remove one member from the class.
+  LLVM_NODISCARD ProgramStateRef removeMember(ProgramStateRef State,
+                                              const SymbolRef Old);
+
   void dumpToStream(ProgramStateRef State, raw_ostream &os) const;
   LLVM_DUMP_METHOD void dump(ProgramStateRef State) const {
     dumpToStream(State, llvm::errs());
@@ -1692,29 +1696,43 @@ private:
 
 bool ConstraintAssignor::assignSymExprToConst(const SymExpr *Sym,
                                               const llvm::APSInt &Constraint) {
-  llvm::SmallSet<EquivalenceClass, 4> SimplifiedClasses;
-  // Iterate over all equivalence classes and try to simplify them.
-  ClassMembersTy Members = State->get<ClassMembers>();
-  for (std::pair<EquivalenceClass, SymbolSet> ClassToSymbolSet : Members) {
-    EquivalenceClass Class = ClassToSymbolSet.first;
-    State = EquivalenceClass::simplify(Builder, RangeFactory, State, Class);
-    if (!State)
-      return false;
-    SimplifiedClasses.insert(Class);
-  }
+  ProgramStateRef OldState;
+  do {
+    OldState = State;
 
-  // Trivial equivalence classes (those that have only one symbol member) are
-  // not stored in the State. Thus, we must skim through the constraints as
-  // well. And we try to simplify symbols in the constraints.
-  ConstraintRangeTy Constraints = State->get<ConstraintRange>();
-  for (std::pair<EquivalenceClass, RangeSet> ClassConstraint : Constraints) {
-    EquivalenceClass Class = ClassConstraint.first;
-    if (SimplifiedClasses.count(Class)) // Already simplified.
-      continue;
-    State = EquivalenceClass::simplify(Builder, RangeFactory, State, Class);
-    if (!State)
-      return false;
-  }
+    // Iterate over all equivalence classes and try to simplify them.
+    ClassMembersTy Members = State->get<ClassMembers>();
+    for (std::pair<EquivalenceClass, SymbolSet> ClassToSymbolSet : Members) {
+      EquivalenceClass Class = ClassToSymbolSet.first;
+      State = EquivalenceClass::simplify(Builder, RangeFactory, State, Class);
+      if (!State)
+        return false;
+    }
+
+    // Trivial equivalence classes (those that have only one symbol member) are
+    // not stored in the State. Thus, we must skim through the constraints as
+    // well. And we try to simplify symbols in the constraints.
+    ConstraintRangeTy Constraints = State->get<ConstraintRange>();
+    for (std::pair<EquivalenceClass, RangeSet> ClassConstraint : Constraints) {
+      EquivalenceClass Class = ClassConstraint.first;
+      State = EquivalenceClass::simplify(Builder, RangeFactory, State, Class);
+      if (!State)
+        return false;
+    }
+
+    // We may have trivial equivalence classes in the disequality info as
+    // well, and we need to simplify them.
+    DisequalityMapTy DisequalityInfo = State->get<DisequalityMap>();
+    for (std::pair<EquivalenceClass, ClassSet> DisequalityEntry :
+         DisequalityInfo) {
+      EquivalenceClass Class = DisequalityEntry.first;
+      ClassSet DisequalClasses = DisequalityEntry.second;
+      State = EquivalenceClass::simplify(Builder, RangeFactory, State, Class);
+      if (!State)
+        return false;
+    }
+
+  } while (State != OldState);
 
   return true;
 }
@@ -2086,6 +2104,32 @@ inline Optional<bool> EquivalenceClass::areEqual(ProgramStateRef State,
   return llvm::None;
 }
 
+LLVM_NODISCARD ProgramStateRef
+EquivalenceClass::removeMember(ProgramStateRef State, const SymbolRef Old) {
+
+  SymbolSet ClsMembers = getClassMembers(State);
+  assert(ClsMembers.contains(Old));
+  assert(ClsMembers.getHeight() > 1 &&
+         "Class should have at least two members");
+
+  // We don't remove `Old`'s Sym->Class relation for two reasons:
+  // 1) This way constraints for the old symbol can still be found via it's
+  // equivalence class that it used to be the member of.
+  // 2) Performance and resource reasons. We can spare one removal and thus one
+  // additional tree in the forest of `ClassMap`.
+
+  // Remove `Old`'s Class->Sym relation.
+  SymbolSet::Factory &F = getMembersFactory(State);
+  ClassMembersTy::Factory &EMFactory = State->get_context<ClassMembers>();
+  ClsMembers = F.remove(ClsMembers, Old);
+  // Overwrite the existing members assigned to this class.
+  ClassMembersTy ClassMembersMap = State->get<ClassMembers>();
+  ClassMembersMap = EMFactory.add(ClassMembersMap, *this, ClsMembers);
+  State = State->set<ClassMembers>(ClassMembersMap);
+
+  return State;
+}
+
 // Iterate over all symbols and try to simplify them. Once a symbol is
 // simplified then we check if we can merge the simplified symbol's equivalence
 // class to this class. This way, we simplify not just the symbols but the
@@ -2101,9 +2145,16 @@ EquivalenceClass::simplify(SValBuilder &SVB, RangeSet::Factory &F,
       // The simplified symbol should be the member of the original Class,
       // however, it might be in another existing class at the moment. We
       // have to merge these classes.
+      ProgramStateRef OldState = State;
       State = merge(F, State, MemberSym, SimplifiedMemberSym);
       if (!State)
         return nullptr;
+      // No state change, no merge happened actually.
+      if (OldState == State)
+        continue;
+      assert(find(State, MemberSym) == find(State, SimplifiedMemberSym));
+      // Remove the old and more complex symbol.
+      State = find(State, MemberSym).removeMember(State, MemberSym);
     }
   }
   return State;
