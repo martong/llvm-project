@@ -3414,6 +3414,9 @@ ExpectedDecl ASTNodeImporter::VisitFunctionDecl(FunctionDecl *D) {
                                     // constructor info
             TrailingRequiresClause))
       return ToFunction;
+    cast<CXXConstructorDecl>(ToFunction)
+        ->setInheritingConstructor(
+            FromConstructor->isInheritingConstructor());
   } else if (CXXDestructorDecl *FromDtor = dyn_cast<CXXDestructorDecl>(D)) {
 
     Error Err = Error::success();

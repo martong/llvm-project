@@ -5738,6 +5738,10 @@ AST_MATCHER(CXXMethodDecl, isVirtualAsWritten) {
   return Node.isVirtualAsWritten();
 }
 
+AST_MATCHER(CXXConstructorDecl, isInheritingConstructor) {
+  return Node.isInheritingConstructor();
+}
+
 /// Matches if the given method or class declaration is final.
 ///
 /// Given:
