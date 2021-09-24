@@ -78,6 +78,7 @@ private:
   ///  worklist algorithm.  It is up to the implementation of WList to decide
   ///  the order that nodes are processed.
   std::unique_ptr<WorkList> WList;
+  std::unique_ptr<WorkList> FWList;
 
   /// BCounterFactory - A factory object for created BlockCounter objects.
   ///   These are used to record for key nodes in the ExplodedGraph the
@@ -170,6 +171,7 @@ public:
   }
 
   WorkList *getWorkList() const { return WList.get(); }
+  WorkList *getForeignWorkList() const { return FWList.get(); }
 
   BlocksExhausted::const_iterator blocks_exhausted_begin() const {
     return blocksExhausted.begin();
