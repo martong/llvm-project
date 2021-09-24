@@ -73,7 +73,8 @@ static std::unique_ptr<WorkList> generateWorkList(AnalyzerOptions &Opts) {
 CoreEngine::CoreEngine(ExprEngine &exprengine, FunctionSummariesTy *FS,
                        AnalyzerOptions &Opts)
     : ExprEng(exprengine), WList(generateWorkList(Opts)),
-      BCounterFactory(G.getAllocator()), FunctionSummaries(FS) {}
+      FWList(generateWorkList(Opts)), BCounterFactory(G.getAllocator()),
+      FunctionSummaries(FS) {}
 
 /// ExecuteWorkList - Run the worklist algorithm for a maximum number of steps.
 bool CoreEngine::ExecuteWorkList(const LocationContext *L, unsigned Steps,
@@ -125,27 +126,36 @@ bool CoreEngine::ExecuteWorkList(const LocationContext *L, unsigned Steps,
   if(!UnlimitedSteps)
     G.reserve(std::min(Steps,PreReservationCap));
 
-  while (WList->hasWork()) {
-    if (!UnlimitedSteps) {
-      if (Steps == 0) {
-        NumReachedMaxSteps++;
-        break;
+  auto ProcessWList = [&]() {
+    while (WList->hasWork()) {
+      if (!UnlimitedSteps) {
+        if (Steps == 0) {
+          NumReachedMaxSteps++;
+          break;
+        }
+        --Steps;
       }
-      --Steps;
+
+      NumSteps++;
+
+      const WorkListUnit &WU = WList->dequeue();
+
+      // Set the current block counter.
+      WList->setBlockCounter(WU.getBlockCounter());
+
+      // Retrieve the node.
+      ExplodedNode *Node = WU.getNode();
+
+      dispatchWorkItem(Node, Node->getLocation(), WU);
     }
+  };
+  ProcessWList();
 
-    NumSteps++;
+  WList = std::move(FWList);
+  // FIXME reset the budget
+  ProcessWList();
+  // FIXME cleanup leaf nodes if the budge is exhausted
 
-    const WorkListUnit& WU = WList->dequeue();
-
-    // Set the current block counter.
-    WList->setBlockCounter(WU.getBlockCounter());
-
-    // Retrieve the node.
-    ExplodedNode *Node = WU.getNode();
-
-    dispatchWorkItem(Node, Node->getLocation(), WU);
-  }
   ExprEng.processEndWorklist();
   return WList->hasWork();
 }

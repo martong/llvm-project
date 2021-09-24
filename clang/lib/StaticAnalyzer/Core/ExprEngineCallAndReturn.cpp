@@ -464,8 +464,17 @@ bool ExprEngine::inlineCall(const CallEvent &Call, const Decl *D,
   bool isNew;
   if (ExplodedNode *N = G.getNode(Loc, State, false, &isNew)) {
     N->addPredecessor(Pred, G);
-    if (isNew)
-      Engine.getWorkList()->enqueue(N);
+    if (isNew) {
+      if (Call.isForeign()) {
+        Engine.getForeignWorkList()->enqueue(N);
+        State = Call.invalidateRegions(currBldrCtx->blockCount(), State);
+        State = bindReturnValue(Call, Pred->getLocationContext(), State);
+        // And make the result node.
+        Bldr.generateNode(Call.getProgramPoint(), State, Pred);
+      } else {
+        Engine.getWorkList()->enqueue(N);
+      }
+    }
   }
 
   // If we decided to inline the call, the successor has been manually
@@ -1086,6 +1095,7 @@ void ExprEngine::defaultEvalCall(NodeBuilder &Bldr, ExplodedNode *Pred,
         }
       }
 
+      Call->setForeign(RD.isForeign());
       // We are not bifurcating and we do have a Decl, so just inline.
       if (inlineCall(*Call, D, Bldr, Pred, State))
         return;

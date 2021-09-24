@@ -541,7 +541,7 @@ RuntimeDefinition AnyFunctionCall::getRuntimeDefinition() const {
     return {};
   }
 
-  return RuntimeDefinition(*CTUDeclOrError);
+  return RuntimeDefinition(*CTUDeclOrError, /*Foreign=*/true);
 }
 
 void AnyFunctionCall::getInitialStackFrameContents(
