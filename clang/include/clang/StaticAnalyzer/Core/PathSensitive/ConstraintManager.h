@@ -96,9 +96,9 @@ public:
     // If StTrue is infeasible, asserting the falseness of Cond is unnecessary
     // because the existing constraints already establish this.
     if (!StTrue) {
-#ifdef EXPENSIVE_CHECKS
-      assert(assume(State, Cond, false) && "System is over constrained.");
-#endif
+      ProgramStateRef StFalse = assume(State, Cond, false);
+      (void)StFalse;
+      //assert(assume(State, Cond, false) && "System is over constrained.");
       return ProgramStatePair((ProgramStateRef)nullptr, State);
     }
 
