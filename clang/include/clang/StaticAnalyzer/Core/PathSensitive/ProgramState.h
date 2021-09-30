@@ -83,6 +83,7 @@ private:
   Environment Env;           // Maps a Stmt to its current SVal.
   Store store;               // Maps a location to its current value.
   GenericDataMap   GDM;      // Custom data stored by a client of this class.
+  bool Infeasible = false;
   unsigned refCount;
 
   /// makeWithStore - Return a ProgramState with the same values as the current
@@ -108,6 +109,9 @@ public:
   ProgramStateManager &getStateManager() const {
     return *stateMgr;
   }
+
+  ProgramStateRef cloneAsInfeasible() const;
+  bool isInfeasible() const { return Infeasible; }
 
   AnalysisManager &getAnalysisManager() const;
 
@@ -135,6 +139,7 @@ public:
     V->Env.Profile(ID);
     ID.AddPointer(V->store);
     V->GDM.Profile(ID);
+    ID.AddBoolean(V->Infeasible);
   }
 
   /// Profile - Used to profile the contents of this object for inclusion

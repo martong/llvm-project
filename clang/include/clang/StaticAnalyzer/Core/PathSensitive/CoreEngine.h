@@ -290,7 +290,7 @@ public:
   ExplodedNode *generateNode(const ProgramPoint &PP,
                              ProgramStateRef State,
                              ExplodedNode *Pred) {
-    return generateNodeImpl(PP, State, Pred, false);
+    return generateNodeImpl(PP, State, Pred, State->isInfeasible());
   }
 
   /// Generates a sink in the ExplodedGraph.

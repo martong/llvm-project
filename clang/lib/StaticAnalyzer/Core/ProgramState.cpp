@@ -55,7 +55,7 @@ ProgramState::ProgramState(ProgramStateManager *mgr, const Environment& env,
 
 ProgramState::ProgramState(const ProgramState &RHS)
     : stateMgr(RHS.stateMgr), Env(RHS.Env), store(RHS.store), GDM(RHS.GDM),
-      refCount(0) {
+      Infeasible(RHS.Infeasible), refCount(0) {
   stateMgr->getStoreManager().incrementReferenceCount(store);
 }
 
@@ -426,6 +426,12 @@ ProgramStateRef ProgramStateManager::getPersistentState(ProgramState &State) {
 ProgramStateRef ProgramState::makeWithStore(const StoreRef &store) const {
   ProgramState NewSt(*this);
   NewSt.setStore(store);
+  return getStateManager().getPersistentState(NewSt);
+}
+
+ProgramStateRef ProgramState::cloneAsInfeasible() const {
+  ProgramState NewSt(*this);
+  NewSt.Infeasible = true;
   return getStateManager().getPersistentState(NewSt);
 }
 
