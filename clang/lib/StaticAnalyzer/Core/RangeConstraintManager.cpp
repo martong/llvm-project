@@ -1620,7 +1620,7 @@ public:
         Builder.getBasicValueFactory().getValue(0, Sym->getType());
     // a % b != 0 implies that a != 0.
     if (!Constraint.containsZero()) {
-      State = RCM.assumeSymNE(State, LHS, Zero, Zero);
+      State = RCM.assumeSymRel(State, LHS, BO_NE, Zero);
       if (!State)
         return false;
     }

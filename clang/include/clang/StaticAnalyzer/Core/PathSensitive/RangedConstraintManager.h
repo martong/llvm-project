@@ -342,7 +342,6 @@ public:
   ProgramStateRef assumeSymUnsupported(ProgramStateRef State, SymbolRef Sym,
                                        bool Assumption) override;
 
-protected:
   /// Assume a constraint between a symbolic expression and a concrete integer.
   virtual ProgramStateRef assumeSymRel(ProgramStateRef State, SymbolRef Sym,
                                        BinaryOperator::Opcode op,
