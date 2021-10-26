@@ -465,7 +465,8 @@ bool ExprEngine::inlineCall(const CallEvent &Call, const Decl *D,
   if (ExplodedNode *N = G.getNode(Loc, State, false, &isNew)) {
     N->addPredecessor(Pred, G);
     if (isNew) {
-      if (Call.isForeign()) {
+      // Foreign WorkList is moved into the original WorkList in ExecuteWorkList.
+      if (Call.isForeign() && Engine.getForeignWorkList()) {
         Engine.getForeignWorkList()->enqueue(N);
         State = Call.invalidateRegions(currBldrCtx->blockCount(), State);
         State = bindReturnValue(Call, Pred->getLocationContext(), State);
