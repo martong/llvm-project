@@ -195,6 +195,8 @@ public:
   getMacroExpansionContextForSourceLocation(
       const clang::SourceLocation &ToLoc) const;
 
+  bool isImported(const Decl *ToDecl) const;
+
 private:
   void lazyInitImporterSharedSt(TranslationUnitDecl *ToTU);
   ASTImporter &getOrCreateASTImporter(ASTUnit *Unit);

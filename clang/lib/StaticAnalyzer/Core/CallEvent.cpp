@@ -515,20 +515,23 @@ RuntimeDefinition AnyFunctionCall::getRuntimeDefinition() const {
       llvm::dbgs() << "Using autosynthesized body for " << FD->getName()
                    << "\n";
   });
-  if (Body) {
-    const Decl* Decl = AD->getDecl();
-    return RuntimeDefinition(Decl);
-  }
 
   ExprEngine &Engine = getState()->getStateManager().getOwningEngine();
+  cross_tu::CrossTranslationUnitContext &CTUCtx =
+      *Engine.getCrossTranslationUnitContext();
+
+  if (Body) {
+    const Decl* Decl = AD->getDecl();
+    return RuntimeDefinition(
+        Decl, /*Foreign=*/CTUCtx.isImported(Decl));
+  }
+
   AnalyzerOptions &Opts = Engine.getAnalysisManager().options;
 
   // Try to get CTU definition only if CTUDir is provided.
   if (!Opts.IsNaiveCTUEnabled)
     return {};
 
-  cross_tu::CrossTranslationUnitContext &CTUCtx =
-      *Engine.getCrossTranslationUnitContext();
   llvm::Expected<const FunctionDecl *> CTUDeclOrError =
       CTUCtx.getCrossTUDefinition(FD, Opts.CTUDir, Opts.CTUIndexName,
                                   Opts.DisplayCTUProgress);
