@@ -15,6 +15,7 @@
 //
 // RUN: cd "%t" && %clang_analyze_cc1 \
 // RUN:   -analyzer-checker=core,debug.ExprInspection \
+// RUN:   -analyzer-config eagerly-assume=false \
 // RUN:   -analyzer-config experimental-enable-naive-ctu-analysis=true \
 // RUN:   -analyzer-config ctu-dir=. \
 // RUN:   -analyzer-config ctu-invocation-list=invocations.yaml \
@@ -82,30 +83,46 @@ int other_macro_diag(int);
 void test_virtual_functions(mycls *obj) {
   // The dynamic type is known.
   clang_analyzer_eval(mycls().fvcl(1) == 8);   // expected-warning{{TRUE}}
+                                               // expected-warning@-1{{UNKNOWN}} stu
   clang_analyzer_eval(derived().fvcl(1) == 9); // expected-warning{{TRUE}}
+                                               // expected-warning@-1{{UNKNOWN}} stu
   // We cannot decide about the dynamic type.
-  clang_analyzer_eval(obj->fvcl(1) == 8); // expected-warning{{FALSE}} expected-warning{{TRUE}}
-  clang_analyzer_eval(obj->fvcl(1) == 9); // expected-warning{{FALSE}} expected-warning{{TRUE}}
+  clang_analyzer_eval(obj->fvcl(1) == 8);      // expected-warning{{TRUE}} ctu
+                                               // expected-warning@-1{{UNKNOWN}} ctu, stu
 }
 
 int main() {
-  clang_analyzer_eval(f(3) == 2); // expected-warning{{TRUE}}
-  clang_analyzer_eval(f(4) == 3); // expected-warning{{TRUE}}
-  clang_analyzer_eval(f(5) == 3); // expected-warning{{FALSE}}
-  clang_analyzer_eval(g(4) == 6); // expected-warning{{TRUE}}
-  clang_analyzer_eval(h(2) == 8); // expected-warning{{TRUE}}
+  clang_analyzer_eval(f(3) == 2); // expected-warning{{TRUE}} ctu
+                                  // expected-warning@-1{{UNKNOWN}} stu
+  clang_analyzer_eval(f(4) == 3); // expected-warning{{TRUE}} ctu
+                                  // expected-warning@-1{{UNKNOWN}} stu
+  clang_analyzer_eval(f(5) == 3); // expected-warning{{FALSE}} ctu
+                                  // expected-warning@-1{{UNKNOWN}} stu
+  clang_analyzer_eval(g(4) == 6); // expected-warning{{TRUE}} ctu
+                                  // expected-warning@-1{{UNKNOWN}} stu
+  clang_analyzer_eval(h(2) == 8); // expected-warning{{TRUE}} ctu
+                                  // expected-warning@-1{{UNKNOWN}} stu
 
-  clang_analyzer_eval(myns::fns(2) == 9);                   // expected-warning{{TRUE}}
-  clang_analyzer_eval(myns::embed_ns::fens(2) == -1);       // expected-warning{{TRUE}}
-  clang_analyzer_eval(mycls().fcl(1) == 6);                 // expected-warning{{TRUE}}
-  clang_analyzer_eval(mycls::fscl(1) == 7);                 // expected-warning{{TRUE}}
-  clang_analyzer_eval(myns::embed_cls().fecl(1) == -6);     // expected-warning{{TRUE}}
-  clang_analyzer_eval(mycls::embed_cls2().fecl2(0) == -11); // expected-warning{{TRUE}}
+  clang_analyzer_eval(myns::fns(2) == 9);                   // expected-warning{{TRUE}} ctu
+                                                            // expected-warning@-1{{UNKNOWN}} stu
+  clang_analyzer_eval(myns::embed_ns::fens(2) == -1);       // expected-warning{{TRUE}} ctu
+                                                            // expected-warning@-1{{UNKNOWN}} stu
+  clang_analyzer_eval(mycls().fcl(1) == 6);                 // expected-warning{{TRUE}} ctu
+                                                            // expected-warning@-1{{UNKNOWN}} stu
+  clang_analyzer_eval(mycls::fscl(1) == 7);                 // expected-warning{{TRUE}} ctu
+                                                            // expected-warning@-1{{UNKNOWN}} stu
+  clang_analyzer_eval(myns::embed_cls().fecl(1) == -6);     // expected-warning{{TRUE}} ctu
+                                                            // expected-warning@-1{{UNKNOWN}} stu
+  clang_analyzer_eval(mycls::embed_cls2().fecl2(0) == -11); // expected-warning{{TRUE}} ctu
+                                                            // expected-warning@-1{{UNKNOWN}} stu
 
-  clang_analyzer_eval(chns::chf1(4) == 12);           // expected-warning{{TRUE}}
-  clang_analyzer_eval(fun_using_anon_struct(8) == 8); // expected-warning{{TRUE}}
+  clang_analyzer_eval(chns::chf1(4) == 12); // expected-warning{{TRUE}} ctu
+                                            // expected-warning@-1{{UNKNOWN}} stu
+  clang_analyzer_eval(fun_using_anon_struct(8) == 8); // expected-warning{{TRUE}} ctu
+                                                      // expected-warning@-1{{UNKNOWN}} stu
 
   clang_analyzer_eval(other_macro_diag(1) == 1); // expected-warning{{TRUE}}
+                                                 // expected-warning@-1{{UNKNOWN}} stu
   // expected-warning@Inputs/ctu-other.cpp:93{{REACHABLE}}
   MACRODIAG(); // expected-warning{{REACHABLE}}
 }

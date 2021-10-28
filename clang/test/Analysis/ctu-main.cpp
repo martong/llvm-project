@@ -23,7 +23,6 @@
 #include "ctu-hdr.h"
 
 void clang_analyzer_eval(int);
-void clang_analyzer_numTimesReached();
 
 int f(int);
 int g(int);
