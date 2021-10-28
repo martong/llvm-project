@@ -777,5 +777,19 @@ CrossTranslationUnitContext::getMacroExpansionContextForSourceLocation(
   return llvm::None;
 }
 
+bool CrossTranslationUnitContext::isImported(const Decl *ToDecl) const {
+  for (const auto &P : ASTUnitImporterMap) {
+    if (P.second->getImportedFromDecl(ToDecl))
+      return true;
+    // We tried to import but failed.
+    // FIXME normally, we should not inline any imported function that has an
+    // error set. But currently we do, even in the baseline, so let's just
+    // mimic the baseline.
+    if (ImporterSharedSt->getImportDeclErrorIfAny(const_cast<Decl*>(ToDecl)))
+      return true;
+  }
+  return false;
+}
+
 } // namespace cross_tu
 } // namespace clang
