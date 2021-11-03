@@ -42,3 +42,30 @@ void test_contradiction(int a, int b, int c, int d, int x) {
   (void)(a * b * c * d * x);
   return;
 }
+
+void clang_analyzer_printState();
+void test_condtradiction_in_disequality_info(int a, int b, int c, int d) {
+  if (a == d)
+    return;
+  if (a != 0)
+    return;
+  clang_analyzer_printState();
+  (void)(a * b * c * d);
+}
+
+int pthread_mutex_lock(void *);
+void clang_analyzer_printState();
+void clang_analyzer_warnIfReached();
+void clang_analyzer_eval(int);
+void clang_analyzer_dump(int);
+void top(int i, int n) {
+  int rem = i % n; // -->     n != 0
+  if (rem != i)    // --> i % n == i, associated constraint: ((i % n) != i) : {[0,0]}
+    return;
+  if (n != 1)      // -->     n == 1 --> i % 1 == i --> i == 0
+    return;
+  clang_analyzer_eval(i == 0); // expected-warning{{TRUE}}
+  if (rem != i)    // --> i % n != i
+    clang_analyzer_warnIfReached(); // no-warning
+  (void)(i * n * rem);
+}

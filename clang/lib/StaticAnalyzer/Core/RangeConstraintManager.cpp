@@ -1764,7 +1764,7 @@ bool ConstraintAssignor::assignSymExprToConst(const SymExpr *Sym,
     State =
         EquivalenceClass::simplify(Builder, RangeFactory, RCM, State, Class);
     if (!State)
-      return false;
+      assert(false);
   }
 
   return true;
