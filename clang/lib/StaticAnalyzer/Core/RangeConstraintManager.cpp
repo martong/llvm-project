@@ -2186,7 +2186,7 @@ LLVM_NODISCARD ProgramStateRef reAssume(ProgramStateRef State,
   if (Constraint->encodesTrueRange()) {
     State = State->assume(DefinedVal, true);
     if (!State)
-      return nullptr;
+      assert(false);
     // Fall through, re-assume based on the range values as well.
   }
   // Overestimate the individual Ranges with the RangeSet' lowest and
