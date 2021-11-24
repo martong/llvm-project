@@ -2229,7 +2229,7 @@ EquivalenceClass::simplify(SValBuilder &SVB, RangeSet::Factory &F,
 
       assert(find(State, MemberSym) == find(State, SimplifiedMemberSym));
       // Remove the old and more complex symbol.
-      State = find(State, MemberSym).removeMember(State, MemberSym);
+      //State = find(State, MemberSym).removeMember(State, MemberSym);
 
       // Query the class constraint again b/c that may have changed during the
       // merge above.
