@@ -1631,6 +1631,30 @@ public:
     return true;
   }
 
+  bool handleMultiplicationOp(const SymSymExpr *Sym, RangeSet Constraint) {
+    if (Sym->getOpcode() != BO_Mul)
+      return true;
+    // x % x == 1 implies that x == 1 or x == -1.
+    if (Constraint.isConstant(1) && Sym->getRHS() == Sym->getLHS()) {
+      SVal SymSVal = Builder.makeSymbolVal(Sym->getLHS());
+      if (auto NonLocSymSVal = SymSVal.getAs<DefinedOrUnknownSVal>()) {
+        auto One = Constraint.getValue(1);
+        APSIntType T(One);
+        auto MOne = T.convert(Constraint.getValue(-1));
+        One.dump();
+        llvm::errs() << "\n";
+        MOne.dump();
+        //auto Zero = Constraint.getValue(0);
+        RangeSet R = RangeFactory.getRangeSet(MOne, One);
+        //R = RangeFactory.deletePoint(R, Zero);
+        State = assign(EquivalenceClass::find(State, Sym->getLHS()), R);
+        if (!State)
+          return false;
+      }
+    }
+    return true;
+  }
+
   inline bool assignSymExprToConst(const SymExpr *Sym, Const Constraint);
   inline bool assignSymIntExprToRangeSet(const SymIntExpr *Sym,
                                          RangeSet Constraint) {
@@ -1769,6 +1793,9 @@ bool ConstraintAssignor::assignSymExprToConst(const SymExpr *Sym,
 bool ConstraintAssignor::assignSymSymExprToRangeSet(const SymSymExpr *Sym,
                                                     RangeSet Constraint) {
   if (!handleRemainderOp(Sym, Constraint))
+    return false;
+
+  if (!handleMultiplicationOp(Sym, Constraint))
     return false;
 
   Optional<bool> ConstraintAsBool = interpreteAsBool(Constraint);

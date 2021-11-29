@@ -287,6 +287,17 @@ public:
     return contains(T.getZeroValue());
   }
 
+  bool isConstant(int I) const {
+    if (const llvm::APSInt *V = getConcreteValue())
+      return *V == I;
+    return false;
+  }
+
+  llvm::APSInt getValue(int I) const {
+    APSIntType T{getMinValue()};
+    return T.getValue(I);
+  }
+
   /// Test if the range is the [0,0] range.
   ///
   /// Complexity: O(1)

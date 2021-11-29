@@ -1,6 +1,7 @@
 // RUN: %clang_analyze_cc1 %s \
 // RUN:   -analyzer-checker=core \
 // RUN:   -analyzer-checker=debug.ExprInspection \
+// RUN:   -analyzer-config eagerly-assume=false \
 // RUN:   -verify
 
 void clang_analyzer_warnIfReached();
@@ -81,4 +82,19 @@ void remainder_with_adjustment_of_composit_lhs(int x, int y) {
   clang_analyzer_eval(x + y + 1 != 0); // expected-warning{{TRUE}}
   clang_analyzer_eval(x + y != -1);    // expected-warning{{TRUE}}
   (void)(x * y); // keep the constraints alive.
+}
+
+void clang_analyzer_printState();
+
+void multiplication_eq_one(int x, unsigned y) {
+  if (x * x == 1) {
+    clang_analyzer_eval(x == 1); // expected-warning{{UNKNOWN}}
+    clang_analyzer_eval(x == -1); // expected-warning{{UNKNOWN}}
+    clang_analyzer_eval(x == 0); // expected-warning{{FALSE}}
+    clang_analyzer_eval(x > 1); // expected-warning{{FALSE}}
+    clang_analyzer_eval(x < -1); // expected-warning{{FALSE}}
+    (void)x;
+  }
+  if (y * y == 1)
+    clang_analyzer_eval(y == 1); // expected-warning{{TRUE}}
 }
