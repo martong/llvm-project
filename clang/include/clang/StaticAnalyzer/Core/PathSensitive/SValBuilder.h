@@ -148,7 +148,7 @@ public:
   /// Simplify symbolic expressions within a given SVal. Return an SVal
   /// that represents the same value, but is hopefully easier to work with
   /// than the original SVal.
-  virtual SVal simplifySVal(ProgramStateRef State, SVal Val) = 0;
+  virtual SVal simplifySVal(ProgramStateRef State, SVal Val, bool crash_in_while=true) = 0;
 
   /// Constructs a symbolic expression for two non-location values.
   SVal makeSymExprValNN(BinaryOperator::Opcode op,

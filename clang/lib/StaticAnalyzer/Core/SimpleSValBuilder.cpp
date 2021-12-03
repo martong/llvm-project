@@ -42,7 +42,7 @@ class SimpleSValBuilder : public SValBuilder {
   //   /    b
   //  1
   // We need another iteration to reach the final result `1`.
-  SVal simplifyUntilFixpoint(ProgramStateRef State, SVal Val);
+  SVal simplifyUntilFixpoint(ProgramStateRef State, SVal Val, bool crash_in_while);
 
   // Recursively descends into symbolic expressions and replaces symbols
   // with their known values (in the sense of the getKnownValue() method).
@@ -69,7 +69,7 @@ public:
   ///  (integer) value, that value is returned. Otherwise, returns NULL.
   const llvm::APSInt *getKnownValue(ProgramStateRef state, SVal V) override;
 
-  SVal simplifySVal(ProgramStateRef State, SVal V) override;
+  SVal simplifySVal(ProgramStateRef State, SVal V, bool crash_in_while=true) override;
 
   SVal MakeSymIntVal(const SymExpr *LHS, BinaryOperator::Opcode op,
                      const llvm::APSInt &RHS, QualType resultTy);
@@ -1132,17 +1132,19 @@ const llvm::APSInt *SimpleSValBuilder::getKnownValue(ProgramStateRef state,
   return nullptr;
 }
 
-SVal SimpleSValBuilder::simplifyUntilFixpoint(ProgramStateRef State, SVal Val) {
+SVal SimpleSValBuilder::simplifyUntilFixpoint(ProgramStateRef State, SVal Val, bool crash_in_while) {
   SVal SimplifiedVal = simplifySValOnce(State, Val);
   while (SimplifiedVal != Val) {
     Val = SimplifiedVal;
     SimplifiedVal = simplifySValOnce(State, Val);
+    if (crash_in_while)
+      assert(SimplifiedVal == Val);
   }
   return SimplifiedVal;
 }
 
-SVal SimpleSValBuilder::simplifySVal(ProgramStateRef State, SVal V) {
-  return simplifyUntilFixpoint(State, V);
+SVal SimpleSValBuilder::simplifySVal(ProgramStateRef State, SVal V, bool crash_in_while) {
+  return simplifyUntilFixpoint(State, V, crash_in_while);
 }
 
 SVal SimpleSValBuilder::simplifySValOnce(ProgramStateRef State, SVal V) {

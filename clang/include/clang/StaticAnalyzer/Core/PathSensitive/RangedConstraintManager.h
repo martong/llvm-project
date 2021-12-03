@@ -424,6 +424,8 @@ SymbolRef simplify(ProgramStateRef State, SymbolRef Sym);
 /// constant (i.e. `ConcreteInt`).
 SVal simplifyToSVal(ProgramStateRef State, SymbolRef Sym);
 
+SVal simplifyToSValNoCrashInWhile(ProgramStateRef State, SymbolRef Sym);
+
 } // namespace ento
 } // namespace clang
 

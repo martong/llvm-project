@@ -236,6 +236,11 @@ SVal simplifyToSVal(ProgramStateRef State, SymbolRef Sym) {
   return SVB.simplifySVal(State, SVB.makeSymbolVal(Sym));
 }
 
+SVal simplifyToSValNoCrashInWhile(ProgramStateRef State, SymbolRef Sym) {
+  SValBuilder &SVB = State->getStateManager().getSValBuilder();
+  return SVB.simplifySVal(State, SVB.makeSymbolVal(Sym), false);
+}
+
 SymbolRef simplify(ProgramStateRef State, SymbolRef Sym) {
   SVal SimplifiedVal = simplifyToSVal(State, Sym);
   if (SymbolRef SimplifiedSym = SimplifiedVal.getAsSymbol())

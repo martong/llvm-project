@@ -2202,7 +2202,7 @@ EquivalenceClass::simplify(SValBuilder &SVB, RangeSet::Factory &F,
   SymbolSet ClassMembers = Class.getClassMembers(State);
   for (const SymbolRef &MemberSym : ClassMembers) {
 
-    const SVal SimplifiedMemberVal = simplifyToSVal(State, MemberSym);
+    const SVal SimplifiedMemberVal = simplifyToSValNoCrashInWhile(State, MemberSym);
     const SymbolRef SimplifiedMemberSym = SimplifiedMemberVal.getAsSymbol();
 
     // The symbol is collapsed to a constant, check if the current State is
