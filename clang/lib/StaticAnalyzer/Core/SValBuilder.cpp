@@ -412,6 +412,15 @@ SVal SValBuilder::makeSymExprValNN(BinaryOperator::Opcode Op,
   SymbolRef symLHS = LHS.getAsSymbol();
   SymbolRef symRHS = RHS.getAsSymbol();
 
+  // FIXME This should be done in getAsSymbol. But then getAsSymbol should be
+  // the member function of SValBuilder (?)
+  if (symRHS)
+    if (auto RLocAsInt = RHS.getAs<nonloc::LocAsInteger>()) {
+      auto FromTy = symRHS->getType();
+      auto ToTy = RLocAsInt->getType(this->Context);
+      symRHS = this->getSymbolManager().getCastSymbol(symRHS, FromTy, ToTy);
+    }
+
   // TODO: When the Max Complexity is reached, we should conjure a symbol
   // instead of generating an Unknown value and propagate the taint info to it.
   const unsigned MaxComp = AnOpts.MaxSymbolComplexity;
@@ -459,23 +468,14 @@ SVal SValBuilder::evalBinOp(ProgramStateRef state, BinaryOperator::Opcode op,
     return evalBinOpLN(state, op, *LV, rhs.castAs<NonLoc>(), type);
   }
 
-  if (const Optional<Loc> RV = rhs.getAs<Loc>()) {
-    const auto IsCommutative = [](BinaryOperatorKind Op) {
-      return Op == BO_Mul || Op == BO_Add || Op == BO_And || Op == BO_Xor ||
-             Op == BO_Or;
-    };
+  if (Optional<Loc> RV = rhs.getAs<Loc>()) {
+    // Support pointer arithmetic where the addend is on the left
+    // and the pointer on the right.
 
-    if (IsCommutative(op)) {
-      // Swap operands.
-      return evalBinOpLN(state, op, *RV, lhs.castAs<NonLoc>(), type);
-    }
+    assert(op == BO_Add);
 
-    // If the right operand is a concrete int location then we have nothing
-    // better but to treat it as a simple nonloc.
-    if (auto RV = rhs.getAs<loc::ConcreteInt>()) {
-      const nonloc::ConcreteInt RhsAsLoc = makeIntVal(RV->getValue());
-      return evalBinOpNN(state, op, lhs.castAs<NonLoc>(), RhsAsLoc, type);
-    }
+    // Commute the operands.
+    return evalBinOpLN(state, op, *RV, lhs.castAs<NonLoc>(), type);
   }
 
   return evalBinOpNN(state, op, lhs.castAs<NonLoc>(), rhs.castAs<NonLoc>(),

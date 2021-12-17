@@ -1204,7 +1204,23 @@ SVal SimpleSValBuilder::simplifySValOnce(ProgramStateRef State, SVal V) {
       return SVB.makeSymbolVal(S);
     }
 
-    // TODO: Support SymbolCast.
+    SVal VisitSymbolCast(const SymbolCast *Cast) {
+      SVal Castee = Visit(Cast->getOperand());
+      const auto &Context = SVB.getContext();
+      QualType CastTy = Cast->getType();
+
+      // Cast a pointer to an integral type.
+      if (Castee.getAs<Loc>() && !Loc::isLocType(CastTy)) {
+        const unsigned BitWidth = Context.getIntWidth(CastTy);
+        if (Castee.getAsSymbol())
+          return SVB.makeLocAsInteger(Castee.castAs<Loc>(), BitWidth);
+        if (auto X = Castee.getAs<loc::ConcreteInt>())
+          return SVB.makeIntVal(X->getValue());
+        // FIXME other cases?
+      }
+
+      return Base::VisitSymbolCast(Cast);
+    }
 
     SVal VisitSymIntExpr(const SymIntExpr *S) {
       auto I = Cached.find(S);

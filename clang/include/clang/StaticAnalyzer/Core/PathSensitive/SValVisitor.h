@@ -141,6 +141,7 @@ public:
   using SValVisitor<ImplClass, RetTy>::Visit;
   using SymExprVisitor<ImplClass, RetTy>::Visit;
   using MemRegionVisitor<ImplClass, RetTy>::Visit;
+  using Base = FullSValVisitor;
 };
 
 } // end namespace ento
