@@ -428,6 +428,8 @@ namespace {
 REGISTER_MAP_WITH_PROGRAMSTATE(DynamicDispatchBifurcationMap,
                                const MemRegion *, unsigned)
 
+// FIXME make the return value to `void`. There is only one return path with
+// `true`.
 bool ExprEngine::inlineCall(const CallEvent &Call, const Decl *D,
                             NodeBuilder &Bldr, ExplodedNode *Pred,
                             ProgramStateRef State) {
@@ -485,9 +487,16 @@ bool ExprEngine::inlineCall(const CallEvent &Call, const Decl *D,
   NumInlinedCalls++;
   Engine.FunctionSummaries->bumpNumTimesInlined(D);
 
-  // Mark the decl as visited.
-  if (VisitedCallees)
-    VisitedCallees->insert(D);
+  // Do not mark as visited in the 2nd run (FWList), so the function will
+  // be visited as top-level, this way we won't loose reports in non-ctu
+  // mode. Considering the case when a function in a foreign TU calls back
+  // into the main TU.
+  // Note, during the 1st run, it doesn't matter if we mark the foreign
+  // functions as visited (or not) because they can never appear as a top level
+  // function in the main TU.
+  if (Engine.getForeignWorkList())
+    if (VisitedCallees)
+      VisitedCallees->insert(D);
 
   return true;
 }
