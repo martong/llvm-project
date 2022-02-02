@@ -488,19 +488,18 @@ bool ExprEngine::inlineCall(const CallEvent &Call, const Decl *D,
 
   bool isNew;
   if (ExplodedNode *N = G.getNode(Loc, InlineState, false, &isNew)) {
-    // Wire in the node only if the call is not foreign or
-    // it is a foreign call and we saw it for the first time.
-    if (!DeferredState || DeferredState != State)
-      N->addPredecessor(Pred, G);
-    if (isNew) {
-      if (DeferredState) {
-        if (DeferredState != State) // This is the first time we saw the foreign CallExpr.
-          Engine.getForeignWorkList()->enqueue(N);
-        conservativeEvalCall(Call, Bldr, Pred, DeferredState);
-        return true;
+    assert(isNew);
+    if (DeferredState) {
+      if (DeferredState !=
+          State) { // This is the first time we saw the foreign CallExpr.
+        N->addPredecessor(Pred, G);
+        Engine.getForeignWorkList()->enqueue(N);
       }
-      Engine.getWorkList()->enqueue(N);
+      conservativeEvalCall(Call, Bldr, Pred, DeferredState);
+      return true;
     }
+    N->addPredecessor(Pred, G);
+    Engine.getWorkList()->enqueue(N);
   }
 
   // If we decided to inline the call, the successor has been manually
