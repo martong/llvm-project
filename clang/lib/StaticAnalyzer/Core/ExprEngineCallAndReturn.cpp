@@ -459,6 +459,7 @@ bool ExprEngine::inlineCall(const CallEvent &Call, const Decl *D,
 
   CallEnter Loc(CallE, CalleeSFC, CurLC);
 
+  auto PrevState = State;
   // Construct a new state which contains the mapping from actual to
   // formal arguments.
   State = State->enterStackFrame(Call, CalleeSFC);
@@ -470,13 +471,10 @@ bool ExprEngine::inlineCall(const CallEvent &Call, const Decl *D,
       // Foreign WorkList is moved into the original WorkList in ExecuteWorkList.
       if (Call.isForeign() && Engine.getForeignWorkList()) {
         Engine.getForeignWorkList()->enqueue(N);
-        State = Call.invalidateRegions(currBldrCtx->blockCount(), State);
-        State = bindReturnValue(Call, Pred->getLocationContext(), State);
-        // And make the result node.
-        Bldr.generateNode(Call.getProgramPoint(), State, Pred);
-      } else {
-        Engine.getWorkList()->enqueue(N);
+        conservativeEvalCall(Call, Bldr, Pred, PrevState);
+        return true;
       }
+      Engine.getWorkList()->enqueue(N);
     }
   }
 

@@ -142,6 +142,8 @@ bool CoreEngine::ExecuteWorkList(const LocationContext *L, unsigned Steps,
 
       // Set the current block counter.
       WList->setBlockCounter(WU.getBlockCounter());
+      if (FWList)
+        FWList->setBlockCounter(WU.getBlockCounter());
 
       // Retrieve the node.
       ExplodedNode *Node = WU.getNode();
