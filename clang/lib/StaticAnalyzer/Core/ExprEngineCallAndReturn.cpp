@@ -423,10 +423,17 @@ namespace {
     DynamicDispatchModeInlined = 1,
     DynamicDispatchModeConservative
   };
+  enum CTUDispatchMode {
+    CTUDispatchModeInline = 1, // Inline on the spot, eagerly.
+    CTUDispatchModeDeferred    // Inline the CTU function later.
+  };
 } // end anonymous namespace
 
 REGISTER_MAP_WITH_PROGRAMSTATE(DynamicDispatchBifurcationMap,
                                const MemRegion *, unsigned)
+// FIXME this could be a simple set.
+REGISTER_MAP_WITH_PROGRAMSTATE(CTUDispatchBifurcationMap,
+                               const Expr *, unsigned)
 
 // FIXME make the return value to `void`. There is only one return path with
 // `true`.
@@ -459,19 +466,34 @@ bool ExprEngine::inlineCall(const CallEvent &Call, const Decl *D,
 
   CallEnter Loc(CallE, CalleeSFC, CurLC);
 
-  auto PrevState = State;
+  ProgramStateRef DeferredState = nullptr;
+  //ProgramStateRef InlineState = nullptr;
+  if (Call.isForeign() && Engine.getForeignWorkList()) {
+    const unsigned *BState = State->get<CTUDispatchBifurcationMap>(CallE);
+    if (!BState) {
+        DeferredState = State->set<CTUDispatchBifurcationMap>(
+            CallE, CTUDispatchModeDeferred);
+    }
+    else
+      // We are already on the conservative path.
+      DeferredState = State;
+  }
+
+  // Use either the DeferredState or the InlineState from now on.
+  ProgramStateRef InlineState = State;
+
   // Construct a new state which contains the mapping from actual to
   // formal arguments.
-  State = State->enterStackFrame(Call, CalleeSFC);
+  InlineState = InlineState->enterStackFrame(Call, CalleeSFC);
 
   bool isNew;
-  if (ExplodedNode *N = G.getNode(Loc, State, false, &isNew)) {
+  if (ExplodedNode *N = G.getNode(Loc, InlineState, false, &isNew)) {
     N->addPredecessor(Pred, G);
     if (isNew) {
-      // Foreign WorkList is moved into the original WorkList in ExecuteWorkList.
-      if (Call.isForeign() && Engine.getForeignWorkList()) {
-        Engine.getForeignWorkList()->enqueue(N);
-        conservativeEvalCall(Call, Bldr, Pred, PrevState);
+      if (DeferredState) {
+        if (DeferredState != State) // This is the first time we saw the foreign CallExpr.
+          Engine.getForeignWorkList()->enqueue(N);
+        conservativeEvalCall(Call, Bldr, Pred, DeferredState);
         return true;
       }
       Engine.getWorkList()->enqueue(N);
