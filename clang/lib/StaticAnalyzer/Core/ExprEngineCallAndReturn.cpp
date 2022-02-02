@@ -488,7 +488,10 @@ bool ExprEngine::inlineCall(const CallEvent &Call, const Decl *D,
 
   bool isNew;
   if (ExplodedNode *N = G.getNode(Loc, InlineState, false, &isNew)) {
-    N->addPredecessor(Pred, G);
+    // Wire in the node only if the call is not foreign or
+    // it is a foreign call and we saw it for the first time.
+    if (!DeferredState || DeferredState != State)
+      N->addPredecessor(Pred, G);
     if (isNew) {
       if (DeferredState) {
         if (DeferredState != State) // This is the first time we saw the foreign CallExpr.
