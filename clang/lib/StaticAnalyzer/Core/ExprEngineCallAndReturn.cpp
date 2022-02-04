@@ -488,18 +488,19 @@ bool ExprEngine::inlineCall(const CallEvent &Call, const Decl *D,
 
   bool isNew;
   if (ExplodedNode *N = G.getNode(Loc, InlineState, false, &isNew)) {
-    assert(isNew);
     if (DeferredState) {
       if (DeferredState !=
           State) { // This is the first time we saw the foreign CallExpr.
         N->addPredecessor(Pred, G);
-        Engine.getForeignWorkList()->enqueue(N);
+        if (isNew)
+          Engine.getForeignWorkList()->enqueue(N);
       }
       conservativeEvalCall(Call, Bldr, Pred, DeferredState);
       return true;
     }
     N->addPredecessor(Pred, G);
-    Engine.getWorkList()->enqueue(N);
+    if (isNew)
+      Engine.getWorkList()->enqueue(N);
   }
 
   // If we decided to inline the call, the successor has been manually
