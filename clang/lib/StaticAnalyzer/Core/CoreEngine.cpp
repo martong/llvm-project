@@ -102,6 +102,8 @@ bool CoreEngine::ExecuteWorkList(const LocationContext *L, unsigned Steps,
 
     // Set the current block counter to being empty.
     WList->setBlockCounter(BCounterFactory.GetEmptyCounter());
+    if (FWList)
+        FWList->setBlockCounter(BCounterFactory.GetEmptyCounter());
 
     if (!InitState)
       InitState = ExprEng.getInitialState(L);
@@ -295,6 +297,8 @@ void CoreEngine::HandleBlockEntrance(const BlockEntrance &L,
   Counter = BCounterFactory.IncrementCount(Counter, LC->getStackFrame(),
                                            BlockId);
   WList->setBlockCounter(Counter);
+  if (FWList)
+    FWList->setBlockCounter(Counter);
 
   // Process the entrance of the block.
   if (Optional<CFGElement> E = L.getFirstElement()) {
