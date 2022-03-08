@@ -245,6 +245,7 @@ namespace clang {
       ToD = CreateFun(std::forward<Args>(args)...);
       // Keep track of imported Decls.
       Importer.RegisterImportedDecl(FromD, ToD);
+      Importer.NewDecls.insert(ToD);
       InitializeImportedDecl(FromD, ToD);
       return false; // A new Decl is created.
     }
