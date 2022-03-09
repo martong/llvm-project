@@ -777,7 +777,7 @@ CrossTranslationUnitContext::getMacroExpansionContextForSourceLocation(
   return llvm::None;
 }
 
-bool CrossTranslationUnitContext::isImported(const Decl *ToDecl) const {
+bool CrossTranslationUnitContext::isImportedAsNew(const Decl *ToDecl) const {
   // We tried to import but failed.
   // FIXME normally, we should not inline any imported function that has an
   // error set. But currently we do, even in the baseline, so let's just

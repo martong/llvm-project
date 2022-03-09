@@ -523,7 +523,7 @@ RuntimeDefinition AnyFunctionCall::getRuntimeDefinition() const {
   if (Body) {
     const Decl* Decl = AD->getDecl();
     return RuntimeDefinition(
-        Decl, /*Foreign=*/CTUCtx.isImported(Decl));
+        Decl, /*Foreign=*/CTUCtx.isImportedAsNew(Decl));
   }
 
   AnalyzerOptions &Opts = Engine.getAnalysisManager().options;
