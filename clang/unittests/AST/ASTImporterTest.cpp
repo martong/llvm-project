@@ -7555,9 +7555,8 @@ TEST_P(ASTImporterOptionSpecificTestBase, isNewDecl) {
   auto *ToBar = FirstDeclMatcher<FunctionDecl>().match(
       ToTU, functionDecl(hasName("bar")));
 
-  ASTImporter *Importer = findFromTU(FromOther)->Importer.get();
-  EXPECT_TRUE(Importer->isNewDecl(ToOther));
-  EXPECT_FALSE(Importer->isNewDecl(ToBar));
+  EXPECT_TRUE(SharedStatePtr->isNewDecl(ToOther));
+  EXPECT_FALSE(SharedStatePtr->isNewDecl(ToBar));
 }
 
 INSTANTIATE_TEST_SUITE_P(ParameterizedTests, ASTImporterLookupTableTest,
