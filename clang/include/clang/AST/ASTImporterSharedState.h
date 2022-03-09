@@ -39,6 +39,9 @@ class ASTImporterSharedState {
   /// never cleared (like ImportedFromDecls).
   llvm::DenseMap<Decl *, ImportError> ImportErrors;
 
+  /// Set of the newly created declarations.
+  llvm::DenseSet<Decl *> NewDecls;
+
   // FIXME put ImportedFromDecls here!
   // And from that point we can better encapsulate the lookup table.
 
@@ -74,6 +77,15 @@ public:
   void setImportDeclError(Decl *To, ImportError Error) {
     ImportErrors[To] = Error;
   }
+
+  bool isNewDecl(const Decl *ToD) const {
+    return NewDecls.count(ToD);
+  }
+
+  void setNewDecl(Decl* ToD) {
+    NewDecls.insert(ToD);
+  }
+
 };
 
 } // namespace clang

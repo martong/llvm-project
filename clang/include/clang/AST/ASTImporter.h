@@ -265,9 +265,6 @@ class TypeSourceInfo;
     /// context to the corresponding declarations in the "from" context.
     llvm::DenseMap<Decl *, Decl *> ImportedFromDecls;
 
-    /// Set of the newly created declarations.
-    llvm::DenseSet<Decl *> NewDecls;
-
     /// Mapping from the already-imported statements in the "from"
     /// context to the corresponding statements in the "to" context.
     llvm::DenseMap<Stmt *, Stmt *> ImportedStmts;
@@ -406,11 +403,6 @@ class TypeSourceInfo;
       if (!FromD)
         return {};
       return FromD;
-    }
-
-    // FIXME store this in the shared state?
-    bool isNewDecl(const Decl *ToD) const {
-      return NewDecls.count(ToD);
     }
 
     /// Import the given declaration context from the "from"
