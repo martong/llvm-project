@@ -7527,6 +7527,39 @@ TEST_P(ASTImporterOptionSpecificTestBase,
   EXPECT_TRUE(ToA->isCompleteDefinition());
 }
 
+TEST_P(ASTImporterOptionSpecificTestBase, isNewDecl) {
+  Decl *FromTU = getTuDecl(
+      R"(
+      int bar() {
+        return 0;
+      }
+      void other() {
+        bar();
+      }
+      )",
+      Lang_CXX11);
+  Decl *ToTU = getToTuDecl(
+      R"(
+      int bar() {
+        return 0;
+      }
+      )",
+      Lang_CXX11);
+  auto *FromOther = FirstDeclMatcher<FunctionDecl>().match(
+      FromTU, functionDecl(hasName("other")));
+  ASSERT_TRUE(FromOther);
+
+  auto *ToOther = Import(FromOther, Lang_CXX11);
+  ASSERT_TRUE(ToOther);
+
+  auto *ToBar = FirstDeclMatcher<FunctionDecl>().match(
+      ToTU, functionDecl(hasName("bar")));
+
+  ASTImporter *Importer = findFromTU(FromOther)->Importer.get();
+  EXPECT_TRUE(Importer->isNewDecl(ToOther));
+  EXPECT_FALSE(Importer->isNewDecl(ToBar));
+}
+
 INSTANTIATE_TEST_SUITE_P(ParameterizedTests, ASTImporterLookupTableTest,
                          DefaultTestValuesForRunOptions);
 
