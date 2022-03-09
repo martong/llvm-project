@@ -195,7 +195,8 @@ public:
   getMacroExpansionContextForSourceLocation(
       const clang::SourceLocation &ToLoc) const;
 
-  bool isImported(const Decl *ToDecl) const;
+  /// Returns true if the given Decl is newly created during the import.
+  bool isImportedAsNew(const Decl *ToDecl) const;
 
 private:
   void lazyInitImporterSharedSt(TranslationUnitDecl *ToTU);
