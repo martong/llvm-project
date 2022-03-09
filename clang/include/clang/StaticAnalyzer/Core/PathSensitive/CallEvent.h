@@ -151,7 +151,7 @@ private:
   ProgramStateRef State;
   const LocationContext *LCtx;
   llvm::PointerUnion<const Expr *, const Decl *> Origin;
-  mutable bool Foreign = false; // From CTU.
+  mutable Optional<bool> Foreign; // From CTU.
 
 protected:
   // This is user data for subclasses.
@@ -213,7 +213,10 @@ public:
     return Origin.dyn_cast<const Decl *>();
   }
 
-  bool isForeign() const { return Foreign; }
+  bool isForeign() const {
+    assert(Foreign.hasValue() && "Foreign must be set before querying");
+    return *Foreign;
+  }
   void setForeign(bool B) const { Foreign = B; }
 
   /// The state in which the call is being evaluated.

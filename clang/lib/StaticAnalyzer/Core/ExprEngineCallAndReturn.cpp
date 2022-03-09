@@ -1110,6 +1110,7 @@ void ExprEngine::defaultEvalCall(NodeBuilder &Bldr, ExplodedNode *Pred,
     State = InlinedFailedState;
   } else {
     RuntimeDefinition RD = Call->getRuntimeDefinition();
+    Call->setForeign(RD.isForeign());
     const Decl *D = RD.getDecl();
     if (shouldInlineCall(*Call, D, Pred, CallOpts)) {
       if (RD.mayHaveOtherDefinitions()) {
@@ -1128,7 +1129,6 @@ void ExprEngine::defaultEvalCall(NodeBuilder &Bldr, ExplodedNode *Pred,
         }
       }
 
-      Call->setForeign(RD.isForeign());
       // We are not bifurcating and we do have a Decl, so just inline.
       if (inlineCall(*Call, D, Bldr, Pred, State))
         return;
