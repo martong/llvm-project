@@ -43,6 +43,10 @@ using namespace ento;
 
 STATISTIC(NumSteps,
             "The # of steps executed.");
+STATISTIC(NumSTUSteps,
+            "The # of STU steps executed.");
+STATISTIC(NumCTUSteps,
+            "The # of CTU steps executed.");
 STATISTIC(NumReachedMaxSteps,
             "The # of times we reached the max number of steps.");
 STATISTIC(NumPathsExplored,
@@ -157,11 +161,18 @@ bool CoreEngine::ExecuteWorkList(const LocationContext *L, unsigned MaxSteps,
     return MaxSteps - Steps;
   };
   const unsigned STUSteps = ProcessWList(MaxSteps);
-  unsigned const MinCTUSteps = 1000; // We need at least some minimal value to pass the lit tests.
-  unsigned MaxCTUSteps = UnlimitedSteps ? MaxSteps : std::max(STUSteps, MinCTUSteps);
+  NumSTUSteps += STUSteps;
+
+  // Let CTU run as many steps we had in the single TU run.
+  // However, we need at least some minimal value to pass the lit tests.
+  // FIXME should we run the lit tests with unlimited steps rather?
+  unsigned const MinCTUSteps = 1000;
+  unsigned MaxCTUSteps =
+      UnlimitedSteps ? MaxSteps : std::max(STUSteps, MinCTUSteps);
 
   WList = std::move(FWList);
-  ProcessWList(MaxCTUSteps);
+  const unsigned CTUSteps = ProcessWList(MaxCTUSteps);
+  NumCTUSteps += CTUSteps;
 
   ExprEng.processEndWorklist();
   return WList->hasWork();
