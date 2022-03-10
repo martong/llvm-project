@@ -780,13 +780,14 @@ CrossTranslationUnitContext::getMacroExpansionContextForSourceLocation(
 bool CrossTranslationUnitContext::isImportedAsNew(const Decl *ToDecl) const {
   if (!ImporterSharedSt)
     return false;
-  // We tried to import but failed.
-  // FIXME normally, we should not inline any imported function that has an
-  // error set. But currently we do, even in the baseline, so let's just
-  // mimic the baseline.
-  //if (ImporterSharedSt->getImportDeclErrorIfAny(const_cast<Decl*>(ToDecl)))
-    //return false;
   return ImporterSharedSt->isNewDecl(const_cast<Decl*>(ToDecl));
+}
+
+bool CrossTranslationUnitContext::hasError(const Decl *ToDecl) const {
+  if (!ImporterSharedSt)
+    return false;
+  return static_cast<bool>(
+      ImporterSharedSt->getImportDeclErrorIfAny(const_cast<Decl *>(ToDecl)));
 }
 
 } // namespace cross_tu
