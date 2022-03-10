@@ -77,7 +77,7 @@ CoreEngine::CoreEngine(ExprEngine &exprengine, FunctionSummariesTy *FS,
       FunctionSummaries(FS) {}
 
 /// ExecuteWorkList - Run the worklist algorithm for a maximum number of steps.
-bool CoreEngine::ExecuteWorkList(const LocationContext *L, unsigned Steps,
+bool CoreEngine::ExecuteWorkList(const LocationContext *L, unsigned MaxSteps,
                                    ProgramStateRef InitState) {
   if (G.num_roots() == 0) { // Initialize the analysis by constructing
     // the root if none exists.
@@ -121,14 +121,16 @@ bool CoreEngine::ExecuteWorkList(const LocationContext *L, unsigned Steps,
   }
 
   // Check if we have a steps limit
-  bool UnlimitedSteps = Steps == 0;
+  bool UnlimitedSteps = MaxSteps == 0;
+
   // Cap our pre-reservation in the event that the user specifies
   // a very large number of maximum steps.
   const unsigned PreReservationCap = 4000000;
   if(!UnlimitedSteps)
-    G.reserve(std::min(Steps,PreReservationCap));
+    G.reserve(std::min(MaxSteps,PreReservationCap));
 
-  auto ProcessWList = [&]() {
+  auto ProcessWList = [this, UnlimitedSteps](unsigned MaxSteps) {
+    unsigned Steps = MaxSteps;
     while (WList->hasWork()) {
       if (!UnlimitedSteps) {
         if (Steps == 0) {
@@ -152,13 +154,14 @@ bool CoreEngine::ExecuteWorkList(const LocationContext *L, unsigned Steps,
 
       dispatchWorkItem(Node, Node->getLocation(), WU);
     }
+    return MaxSteps - Steps;
   };
-  ProcessWList();
+  const unsigned STUSteps = ProcessWList(MaxSteps);
+  unsigned const MinCTUSteps = 1000; // We need at least some minimal value to pass the lit tests.
+  unsigned MaxCTUSteps = UnlimitedSteps ? MaxSteps : std::max(STUSteps, MinCTUSteps);
 
   WList = std::move(FWList);
-  // FIXME reset the budget
-  ProcessWList();
-  // FIXME cleanup leaf nodes if the budge is exhausted
+  ProcessWList(MaxCTUSteps);
 
   ExprEng.processEndWorklist();
   return WList->hasWork();
