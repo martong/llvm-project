@@ -2,13 +2,13 @@
 // RUN:   -analyzer-checker=core,debug.ExprInspection \
 // RUN:   -analyzer-config eagerly-assume=false \
 // RUN:   -analyzer-stats \
-// RUN:   -analyze-function="baruser()" \
+// RUN:   -analyze-function='baruser(int)' -x c++ \
 // RUN:   -verify=nonctu %s
 
 // RUN: %clang_analyze_cc1 %s -std=c++14 -triple x86_64-pc-linux-gnu \
 // RUN:   -analyzer-checker=core,debug.ExprInspection \
 // RUN:   -analyzer-config eagerly-assume=false \
-// RUN:   -analyze-function="baruser()" \
+// RUN:   -analyze-function='baruser(int)' -x c++ \
 // RUN:   -analyzer-stats 2>&1 | FileCheck %s
 // CHECK: 19 CoreEngine           - The # of steps executed.
 
@@ -24,7 +24,7 @@
 // RUN:   -analyzer-config ctu-dir=%t/ctudir \
 // RUN:   -verify=ctu %s \
 // RUN:   -analyzer-stats \
-// RUN:   -analyze-function="baruser()" \
+// RUN:   -analyze-function='baruser(int)' -x c++ \
 // RUN:   -analyzer-config max-nodes=19
 //                         ^^^^^^^^^^^^ Here we limit the number of nodes to
 //                         that we had in the nonctu run. See the FileCheck
@@ -42,7 +42,7 @@ int bar() {
 
 void other(); // Defined in the other TU.
 
-void baruser() {
+void baruser(int) {
   other();
   int x = bar();
   (void)(1 / x);
