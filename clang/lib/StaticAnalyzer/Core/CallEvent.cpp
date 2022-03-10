@@ -522,8 +522,13 @@ RuntimeDefinition AnyFunctionCall::getRuntimeDefinition() const {
 
   if (Body) {
     const Decl* Decl = AD->getDecl();
-    return RuntimeDefinition(
-        Decl, /*Foreign=*/CTUCtx.isImportedAsNew(Decl));
+    if (CTUCtx.isImportedAsNew(Decl)) {
+      // A newly created definition, but we had error(s) during the import.
+      if(CTUCtx.hasError(Decl))
+        return {};
+      return RuntimeDefinition(Decl, /*Foreign=*/true);
+    }
+    return RuntimeDefinition(Decl, /*Foreign=*/false);
   }
 
   AnalyzerOptions &Opts = Engine.getAnalysisManager().options;
