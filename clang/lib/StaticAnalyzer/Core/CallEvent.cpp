@@ -498,6 +498,20 @@ ArrayRef<ParmVarDecl*> AnyFunctionCall::parameters() const {
   return D->parameters();
 }
 
+bool AnyFunctionCall::hasCrossTUDefinition() const {
+  const FunctionDecl *FD = getDecl();
+  if (!FD)
+    return false;
+  ExprEngine &Engine = getState()->getStateManager().getOwningEngine();
+  cross_tu::CrossTranslationUnitContext &CTUCtx =
+      *Engine.getCrossTranslationUnitContext();
+  AnalyzerOptions &Opts = Engine.getAnalysisManager().options;
+  // Try to get CTU definition only if CTUDir is provided.
+  if (!Opts.IsNaiveCTUEnabled)
+    return false;
+  return CTUCtx.hasCrossTUDefinition(FD, Opts.CTUDir, Opts.CTUIndexName);
+}
+
 RuntimeDefinition AnyFunctionCall::getRuntimeDefinition() const {
   const FunctionDecl *FD = getDecl();
   if (!FD)

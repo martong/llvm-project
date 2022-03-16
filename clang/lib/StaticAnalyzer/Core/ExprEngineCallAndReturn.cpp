@@ -16,6 +16,7 @@
 #include "clang/AST/DeclCXX.h"
 #include "clang/Analysis/Analyses/LiveVariables.h"
 #include "clang/Analysis/ConstructionContext.h"
+#include "clang/CrossTU/CrossTranslationUnit.h"
 #include "clang/StaticAnalyzer/Core/CheckerManager.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/DynamicExtent.h"
@@ -424,20 +425,83 @@ namespace {
     DynamicDispatchModeConservative
   };
   enum CTUDispatchMode {
-    CTUDispatchModeInline = 1, // Inline on the spot, eagerly.
-    CTUDispatchModeDeferred    // Inline the CTU function later.
+    CTUDispatchModeInline = 1,
+    CTUDispatchModeConservativeEval
   };
 } // end anonymous namespace
 
 REGISTER_MAP_WITH_PROGRAMSTATE(DynamicDispatchBifurcationMap,
                                const MemRegion *, unsigned)
-// FIXME this could be a simple set.
-REGISTER_MAP_WITH_PROGRAMSTATE(CTUDispatchBifurcationMap,
-                               const Expr *, unsigned)
 
 // FIXME make the return value to `void`. There is only one return path with
 // `true`.
 bool ExprEngine::inlineCall(const CallEvent &Call, const Decl *D,
+                            NodeBuilder &Bldr, ExplodedNode *Pred,
+                            ProgramStateRef State) {
+  assert(D);
+
+  const LocationContext *CurLC = Pred->getLocationContext();
+  const StackFrameContext *CallerSFC = CurLC->getStackFrame();
+  const LocationContext *ParentOfCallee = CallerSFC;
+  if (Call.getKind() == CE_Block &&
+      !cast<BlockCall>(Call).isConversionFromLambda()) {
+    const BlockDataRegion *BR = cast<BlockCall>(Call).getBlockRegion();
+    assert(BR && "If we have the block definition we should have its region");
+    AnalysisDeclContext *BlockCtx = AMgr.getAnalysisDeclContext(D);
+    ParentOfCallee = BlockCtx->getBlockInvocationContext(CallerSFC,
+                                                         cast<BlockDecl>(D),
+                                                         BR);
+  }
+
+  // This may be NULL, but that's fine.
+  const Expr *CallE = Call.getOriginExpr();
+
+  // Construct a new stack frame for the callee.
+  AnalysisDeclContext *CalleeADC = AMgr.getAnalysisDeclContext(D);
+  const StackFrameContext *CalleeSFC =
+      CalleeADC->getStackFrame(ParentOfCallee, CallE, currBldrCtx->getBlock(),
+                               currBldrCtx->blockCount(), currStmtIdx);
+
+  CallEnter Loc(CallE, CalleeSFC, CurLC);
+
+  // Construct a new state which contains the mapping from actual to
+  // formal arguments.
+  State = State->enterStackFrame(Call, CalleeSFC);
+
+  bool isNew;
+  if (ExplodedNode *N = G.getNode(Loc, State, false, &isNew)) {
+    N->addPredecessor(Pred, G);
+    if (isNew)
+      Engine.getWorkList()->enqueue(N);
+  }
+
+  // If we decided to inline the call, the successor has been manually
+  // added onto the work list so remove it from the node builder.
+  Bldr.takeNodes(Pred);
+
+  NumInlinedCalls++;
+  Engine.FunctionSummaries->bumpNumTimesInlined(D);
+
+  // Do not mark as visited in the 2nd run (FWList), so the function will
+  // be visited as top-level, this way we won't loose reports in non-ctu
+  // mode. Considering the case when a function in a foreign TU calls back
+  // into the main TU.
+  // Note, during the 1st run, it doesn't matter if we mark the foreign
+  // functions as visited (or not) because they can never appear as a top level
+  // function in the main TU.
+  if (Engine.getForeignWorkList())
+    // Mark the decl as visited.
+    if (VisitedCallees)
+      VisitedCallees->insert(D);
+
+  return true;
+}
+
+// FIXME this could be a simple set.
+REGISTER_MAP_WITH_PROGRAMSTATE(CTUDispatchBifurcationMap,
+                               const Expr *, unsigned)
+/*
+bool ExprEngine::inlineCallProto(const CallEvent &Call, const Decl *D,
                             NodeBuilder &Bldr, ExplodedNode *Pred,
                             ProgramStateRef State) {
   assert(D);
@@ -522,7 +586,7 @@ bool ExprEngine::inlineCall(const CallEvent &Call, const Decl *D,
       VisitedCallees->insert(D);
 
   return true;
-}
+} */
 
 static ProgramStateRef getInlineFailedState(ProgramStateRef State,
                                             const Stmt *CallE) {
@@ -1109,6 +1173,39 @@ void ExprEngine::defaultEvalCall(NodeBuilder &Bldr, ExplodedNode *Pred,
     // If we already tried once and failed, make sure we don't retry later.
     State = InlinedFailedState;
   } else {
+
+    if (Engine.getForeignWorkList() && Call->hasCrossTUDefinition()) {
+      ProgramStateRef ConservativeEvalState = nullptr;
+      ProgramStateRef InlineState = nullptr;
+      const unsigned *BState = State->get<CTUDispatchBifurcationMap>(E);
+      if (!BState) {
+        const FunctionDecl *FD = cast<FunctionDecl>(Call->getDecl());
+
+        // Does not have a body in this TU.
+        if (!FD->hasBody()) {
+
+          InlineState =
+              State->set<CTUDispatchBifurcationMap>(E, CTUDispatchModeInline);
+          bool isNew;
+          if (ExplodedNode *N = G.getNode(Call->getProgramPoint(), InlineState,
+                                          false, &isNew)) {
+            N->addPredecessor(Pred, G);
+            if (isNew)
+              Engine.getForeignWorkList()->enqueue(
+                  N, this->currBldrCtx->getBlock(), this->currStmtIdx);
+          }
+
+          ConservativeEvalState = State->set<CTUDispatchBifurcationMap>(
+              E, CTUDispatchModeConservativeEval);
+          return conservativeEvalCall(*Call, Bldr, Pred, ConservativeEvalState);
+        }
+      } else if (*BState == CTUDispatchModeConservativeEval) {
+        return conservativeEvalCall(*Call, Bldr, Pred, ConservativeEvalState);
+      }
+      // else fall through and call getRuntimeDefinition() which will load the
+      // foreign definition.
+    }
+
     RuntimeDefinition RD = Call->getRuntimeDefinition();
     Call->setForeign(RD.isForeign());
     const Decl *D = RD.getDecl();
@@ -1133,6 +1230,8 @@ void ExprEngine::defaultEvalCall(NodeBuilder &Bldr, ExplodedNode *Pred,
       if (inlineCall(*Call, D, Bldr, Pred, State))
         return;
     }
+
+
   }
 
   // If we can't inline it, handle the return value and invalidate the regions.

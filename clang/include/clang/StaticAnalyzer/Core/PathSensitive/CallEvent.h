@@ -233,6 +233,8 @@ public:
   /// called.
   virtual RuntimeDefinition getRuntimeDefinition() const = 0;
 
+  virtual bool hasCrossTUDefinition() const { return false; }
+
   /// Returns the expression whose value will be the result of this call.
   /// May be null.
   virtual const Expr *getOriginExpr() const {
@@ -495,6 +497,8 @@ public:
   }
 
   RuntimeDefinition getRuntimeDefinition() const override;
+
+  bool hasCrossTUDefinition() const override;
 
   bool argumentsMayEscape() const override;
 
