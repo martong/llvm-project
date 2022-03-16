@@ -150,6 +150,12 @@ public:
   getCrossTUDefinition(const VarDecl *VD, StringRef CrossTUDir,
                        StringRef IndexName, bool DisplayCTUProgress = false);
 
+  /// Returns true if the given function has a definition in the CTU index file.
+  /// This function does attempt to load an external AST, it operates solely on
+  /// the CTU index file.
+  bool hasCrossTUDefinition(const FunctionDecl *FD, StringRef CrossTUDir,
+                            StringRef IndexName);
+
   /// This function loads a definition from an external AST file.
   ///
   /// A definition with the same declaration will be looked up in the
@@ -317,6 +323,11 @@ private:
     llvm::Expected<std::string> getFileForFunction(StringRef FunctionName,
                                                    StringRef CrossTUDir,
                                                    StringRef IndexName);
+
+    /// Identifies the path of the file which can be used to load the ASTUnit
+    /// for a given declaration.
+    llvm::Expected<std::string>
+    getFileForDecl(const NamedDecl *D, StringRef CrossTUDir, StringRef IndexName);
 
   private:
     llvm::Error ensureCTUIndexLoaded(StringRef CrossTUDir, StringRef IndexName);
