@@ -1898,6 +1898,13 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
 bool ExprEngine::replayWithoutInlining(ExplodedNode *N,
                                        const LocationContext *CalleeLC) {
   const StackFrameContext *CalleeSF = CalleeLC->getStackFrame();
+  // There is no sense to replay a foreign function because that was
+  // conservatively evaluated during the single tu mode. But this is true only
+  // if the caller is in the main TU. If the caller is in another TU, then it
+  // hadn't been evaluated before with the single tu mode.
+  // FIXME How to determine if the Caller is in the main TU?
+  //if (CTU.isImportedAsNew(CalleeSF->getDecl()))
+    //return false;
   const StackFrameContext *CallerSF = CalleeSF->getParent()->getStackFrame();
   assert(CalleeSF && CallerSF);
   ExplodedNode *BeforeProcessingCall = nullptr;
