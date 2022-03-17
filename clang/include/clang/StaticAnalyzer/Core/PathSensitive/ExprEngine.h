@@ -807,8 +807,6 @@ private:
 
   bool inlineCall(const CallEvent &Call, const Decl *D, NodeBuilder &Bldr,
                   ExplodedNode *Pred, ProgramStateRef State);
-  bool inlineCallProto(const CallEvent &Call, const Decl *D, NodeBuilder &Bldr,
-                  ExplodedNode *Pred, ProgramStateRef State);
 
   /// Conservatively evaluate call by invalidating regions and binding
   /// a conjured return value.

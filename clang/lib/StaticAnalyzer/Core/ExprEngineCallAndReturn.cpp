@@ -497,97 +497,6 @@ bool ExprEngine::inlineCall(const CallEvent &Call, const Decl *D,
   return true;
 }
 
-// FIXME this could be a simple set.
-REGISTER_MAP_WITH_PROGRAMSTATE(CTUDispatchBifurcationMap,
-                               const Expr *, unsigned)
-/*
-bool ExprEngine::inlineCallProto(const CallEvent &Call, const Decl *D,
-                            NodeBuilder &Bldr, ExplodedNode *Pred,
-                            ProgramStateRef State) {
-  assert(D);
-
-  const LocationContext *CurLC = Pred->getLocationContext();
-  const StackFrameContext *CallerSFC = CurLC->getStackFrame();
-  const LocationContext *ParentOfCallee = CallerSFC;
-  if (Call.getKind() == CE_Block &&
-      !cast<BlockCall>(Call).isConversionFromLambda()) {
-    const BlockDataRegion *BR = cast<BlockCall>(Call).getBlockRegion();
-    assert(BR && "If we have the block definition we should have its region");
-    AnalysisDeclContext *BlockCtx = AMgr.getAnalysisDeclContext(D);
-    ParentOfCallee = BlockCtx->getBlockInvocationContext(CallerSFC,
-                                                         cast<BlockDecl>(D),
-                                                         BR);
-  }
-
-  // This may be NULL, but that's fine.
-  const Expr *CallE = Call.getOriginExpr();
-
-  // Construct a new stack frame for the callee.
-  AnalysisDeclContext *CalleeADC = AMgr.getAnalysisDeclContext(D);
-  const StackFrameContext *CalleeSFC =
-      CalleeADC->getStackFrame(ParentOfCallee, CallE, currBldrCtx->getBlock(),
-                               currBldrCtx->blockCount(), currStmtIdx);
-
-  CallEnter Loc(CallE, CalleeSFC, CurLC);
-
-  ProgramStateRef DeferredState = nullptr;
-  //ProgramStateRef InlineState = nullptr;
-  if (Call.isForeign() && Engine.getForeignWorkList()) {
-    const unsigned *BState = State->get<CTUDispatchBifurcationMap>(CallE);
-    if (!BState) {
-        DeferredState = State->set<CTUDispatchBifurcationMap>(
-            CallE, CTUDispatchModeDeferred);
-    }
-    else
-      // We are already on the conservative path.
-      DeferredState = State;
-  }
-
-  // Use either the DeferredState or the InlineState from now on.
-  ProgramStateRef InlineState = State;
-
-  // Construct a new state which contains the mapping from actual to
-  // formal arguments.
-  InlineState = InlineState->enterStackFrame(Call, CalleeSFC);
-
-  bool isNew;
-  if (ExplodedNode *N = G.getNode(Loc, InlineState, false, &isNew)) {
-    if (DeferredState) {
-      if (DeferredState !=
-          State) { // This is the first time we saw the foreign CallExpr.
-        N->addPredecessor(Pred, G);
-        if (isNew)
-          Engine.getForeignWorkList()->enqueue(N);
-      }
-      conservativeEvalCall(Call, Bldr, Pred, DeferredState);
-      return true;
-    }
-    N->addPredecessor(Pred, G);
-    if (isNew)
-      Engine.getWorkList()->enqueue(N);
-  }
-
-  // If we decided to inline the call, the successor has been manually
-  // added onto the work list so remove it from the node builder.
-  Bldr.takeNodes(Pred);
-
-  NumInlinedCalls++;
-  Engine.FunctionSummaries->bumpNumTimesInlined(D);
-
-  // Do not mark as visited in the 2nd run (FWList), so the function will
-  // be visited as top-level, this way we won't loose reports in non-ctu
-  // mode. Considering the case when a function in a foreign TU calls back
-  // into the main TU.
-  // Note, during the 1st run, it doesn't matter if we mark the foreign
-  // functions as visited (or not) because they can never appear as a top level
-  // function in the main TU.
-  if (Engine.getForeignWorkList())
-    if (VisitedCallees)
-      VisitedCallees->insert(D);
-
-  return true;
-} */
-
 static ProgramStateRef getInlineFailedState(ProgramStateRef State,
                                             const Stmt *CallE) {
   const void *ReplayState = State->get<ReplayWithoutInlining>();
@@ -1150,6 +1059,10 @@ static bool isTrivialObjectAssignment(const CallEvent &Call) {
   return MD->isTrivial();
 }
 
+// FIXME this could be a simple set.
+REGISTER_MAP_WITH_PROGRAMSTATE(CTUDispatchBifurcationMap,
+                               const Expr *, unsigned)
+
 void ExprEngine::defaultEvalCall(NodeBuilder &Bldr, ExplodedNode *Pred,
                                  const CallEvent &CallTemplate,
                                  const EvalCallOptions &CallOpts) {
@@ -1229,7 +1142,6 @@ void ExprEngine::defaultEvalCall(NodeBuilder &Bldr, ExplodedNode *Pred,
       if (inlineCall(*Call, D, Bldr, Pred, State))
         return;
     }
-
 
   }
 
