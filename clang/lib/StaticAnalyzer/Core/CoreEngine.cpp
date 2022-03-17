@@ -170,7 +170,7 @@ bool CoreEngine::ExecuteWorkList(const LocationContext *L, unsigned MaxSteps,
       this->ExprEng.getAnalysisManager().options.CTUMaxNodesMin;
   const unsigned Mul =
       this->ExprEng.getAnalysisManager().options.CTUMaxNodesMultiplier;
-  unsigned MaxCTUSteps = std::max(STUSteps * Mul, MinCTUSteps);
+  unsigned MaxCTUSteps = std::max(STUSteps * Mul / 100, MinCTUSteps);
 
   WList = std::move(FWList);
   const unsigned CTUSteps = ProcessWList(MaxCTUSteps);
