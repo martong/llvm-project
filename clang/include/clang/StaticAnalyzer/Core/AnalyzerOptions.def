@@ -408,19 +408,23 @@ ANALYZER_OPTION_DEPENDS_ON_USER_MODE(
     "top level function (for each exploded graph). 0 means no limit.",
     /* SHALLOW_VAL */ 75000, /* DEEP_VAL */ 225000)
 
+// FIXME float?
 ANALYZER_OPTION(
     unsigned, CTUMaxNodesMultiplier, "ctu-max-nodes-mul",
     "We count the nodes for a normal single tu analysis. We multiply that "
-    "number with this configuration value to get the maximum number of "
-    "nodes that the analyzer can generate while exploring a top level "
-    "function in CTU mode (for each exploded graph).", 1)
+    "number with this config value then we divide the result by 100 to get "
+    "the maximum number of nodes that the analyzer can generate while "
+    "exploring a top level function in CTU mode (for each exploded graph)."
+    "For example, 100 means that CTU will explore maximum as much nodes that "
+    "we explored during the single tu mode, 200 means it will explore twice as "
+    "much, 50 means it will explore maximum 50% more.", 100)
 
 ANALYZER_OPTION(
     unsigned, CTUMaxNodesMin, "ctu-max-nodes-min",
     "The maximum number of nodes in CTU mode is determinded by "
     "'ctu-max-nodes-mul'. However, if the number of nodes in single tu analysis "
     "is too low, it is meaningful to provide a minimum value that serves as an "
-    "upper bound to the generated nodes in the exploded graphs.", 1000)
+    "upper bound instead.", 1000)
 
 ANALYZER_OPTION(
     unsigned, RegionStoreSmallStructLimit, "region-store-small-struct-limit",
