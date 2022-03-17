@@ -49,6 +49,8 @@
 // CHECK-NEXT: ctu-import-threshold = 24
 // CHECK-NEXT: ctu-index-name = externalDefMap.txt
 // CHECK-NEXT: ctu-invocation-list = invocations.yaml
+// CHECK-NEXT: ctu-max-nodes-min = 1000
+// CHECK-NEXT: ctu-max-nodes-mul = 1
 // CHECK-NEXT: deadcode.DeadStores:ShowFixIts = false
 // CHECK-NEXT: deadcode.DeadStores:WarnForDeadNestedAssignments = true
 // CHECK-NEXT: debug.AnalysisOrder:* = false
