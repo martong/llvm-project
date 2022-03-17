@@ -559,6 +559,11 @@ RuntimeDefinition AnyFunctionCall::getRuntimeDefinition() const {
                     [&](const cross_tu::IndexError &IE) {
                       CTUCtx.emitCrossTUDiagnostics(IE);
                     });
+    // FIXME We could set in the RuntimeDefinition that there was an error, and
+    // based on that we could create a sink node in defaultEvalCall instead of
+    // conservative evaluation. However, would it provide a better coverage,
+    // and what are the disadvantages?
+    // The same applies to above, when the body had been indirectly imported.
     return {};
   }
 
