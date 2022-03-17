@@ -1061,7 +1061,7 @@ static bool isTrivialObjectAssignment(const CallEvent &Call) {
 
 // FIXME this could be a simple set.
 REGISTER_MAP_WITH_PROGRAMSTATE(CTUDispatchBifurcationMap,
-                               const Expr *, unsigned)
+                               const FunctionDecl *, unsigned)
 
 void ExprEngine::defaultEvalCall(NodeBuilder &Bldr, ExplodedNode *Pred,
                                  const CallEvent &CallTemplate,
@@ -1087,18 +1087,23 @@ void ExprEngine::defaultEvalCall(NodeBuilder &Bldr, ExplodedNode *Pred,
     State = InlinedFailedState;
   } else {
 
-    if (Engine.getCTUWorkList() && Call->hasCrossTUDefinition()) {
+    const FunctionDecl *const FD = [&Call]() {
+      const auto *F = dyn_cast_or_null<FunctionDecl>(Call->getDecl());
+      return F ? F->getCanonicalDecl() : F;
+    }();
+    if (FD && Engine.getCTUWorkList() && Call->hasCrossTUDefinition()) {
       ProgramStateRef ConservativeEvalState = nullptr;
       ProgramStateRef InlineState = nullptr;
-      const unsigned *BState = State->get<CTUDispatchBifurcationMap>(E);
+      // We decide the evaluation strategy only once for a FunctionDecl that is
+      // potentially referenced by many Callees.
+      const unsigned *BState = State->get<CTUDispatchBifurcationMap>(FD);
       if (!BState) {
-        const FunctionDecl *FD = cast<FunctionDecl>(Call->getDecl());
 
         // Does not have a body in this TU.
         if (!FD->hasBody()) {
 
           InlineState =
-              State->set<CTUDispatchBifurcationMap>(E, CTUDispatchModeInline);
+              State->set<CTUDispatchBifurcationMap>(FD, CTUDispatchModeInline);
           bool isNew;
           if (ExplodedNode *N = G.getNode(Call->getProgramPoint(), InlineState,
                                           false, &isNew)) {
@@ -1109,11 +1114,11 @@ void ExprEngine::defaultEvalCall(NodeBuilder &Bldr, ExplodedNode *Pred,
           }
 
           ConservativeEvalState = State->set<CTUDispatchBifurcationMap>(
-              E, CTUDispatchModeConservativeEval);
+              FD, CTUDispatchModeConservativeEval);
           return conservativeEvalCall(*Call, Bldr, Pred, ConservativeEvalState);
         }
       } else if (*BState == CTUDispatchModeConservativeEval) {
-        return conservativeEvalCall(*Call, Bldr, Pred, ConservativeEvalState);
+        return conservativeEvalCall(*Call, Bldr, Pred, State);
       }
       // else fall through and call getRuntimeDefinition() which will load the
       // foreign definition.
