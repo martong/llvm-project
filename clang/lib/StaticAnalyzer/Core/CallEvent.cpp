@@ -540,9 +540,8 @@ RuntimeDefinition AnyFunctionCall::getRuntimeDefinition() const {
       // A newly created definition, but we had error(s) during the import.
       if(CTUCtx.hasError(Decl))
         return {};
-      return RuntimeDefinition(Decl, /*Foreign=*/true);
     }
-    return RuntimeDefinition(Decl, /*Foreign=*/false);
+    return RuntimeDefinition(Decl);
   }
 
   AnalyzerOptions &Opts = Engine.getAnalysisManager().options;
@@ -563,7 +562,7 @@ RuntimeDefinition AnyFunctionCall::getRuntimeDefinition() const {
     return {};
   }
 
-  return RuntimeDefinition(*CTUDeclOrError, /*Foreign=*/true);
+  return RuntimeDefinition(*CTUDeclOrError);
 }
 
 void AnyFunctionCall::getInitialStackFrameContents(
