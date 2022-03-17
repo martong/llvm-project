@@ -29,7 +29,7 @@
 // RUN:   -analyzer-config eagerly-assume=false \
 // RUN:   -analyzer-config experimental-enable-naive-ctu-analysis=true \
 // RUN:   -analyzer-config display-ctu-progress=true \
-// RUN:   -analyzer-config ctu-max-nodes-mul=1 \
+// RUN:   -analyzer-config ctu-max-nodes-mul=100 \
 // RUN:   -analyzer-config ctu-max-nodes-min=1000 \
 // RUN:   -analyzer-config ctu-dir=%t/ctudir %s 2>&1 | FileCheck --check-prefix=CTU-CHECK %s
 // CTU-CHECK: CTU loaded AST file

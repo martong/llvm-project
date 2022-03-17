@@ -41,7 +41,7 @@ int bar() {
 // RUN:   -analyzer-config ctu-dir=%t/ctudir \
 // RUN:   -verify=ctu %s \
 // RUN:   -analyze-function='baruser(int)' -x c++ \
-// RUN:   -analyzer-config ctu-max-nodes-mul=1 \
+// RUN:   -analyzer-config ctu-max-nodes-mul=100 \
 // RUN:   -analyzer-config ctu-max-nodes-min=1000
 
 void other(); // Defined in the other TU.
