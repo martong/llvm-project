@@ -482,14 +482,14 @@ bool ExprEngine::inlineCall(const CallEvent &Call, const Decl *D,
   NumInlinedCalls++;
   Engine.FunctionSummaries->bumpNumTimesInlined(D);
 
-  // Do not mark as visited in the 2nd run (FWList), so the function will
+  // Do not mark as visited in the 2nd run (CTUWList), so the function will
   // be visited as top-level, this way we won't loose reports in non-ctu
   // mode. Considering the case when a function in a foreign TU calls back
   // into the main TU.
   // Note, during the 1st run, it doesn't matter if we mark the foreign
   // functions as visited (or not) because they can never appear as a top level
   // function in the main TU.
-  if (Engine.getForeignWorkList())
+  if (Engine.getCTUWorkList())
     // Mark the decl as visited.
     if (VisitedCallees)
       VisitedCallees->insert(D);
@@ -1087,7 +1087,7 @@ void ExprEngine::defaultEvalCall(NodeBuilder &Bldr, ExplodedNode *Pred,
     State = InlinedFailedState;
   } else {
 
-    if (Engine.getForeignWorkList() && Call->hasCrossTUDefinition()) {
+    if (Engine.getCTUWorkList() && Call->hasCrossTUDefinition()) {
       ProgramStateRef ConservativeEvalState = nullptr;
       ProgramStateRef InlineState = nullptr;
       const unsigned *BState = State->get<CTUDispatchBifurcationMap>(E);
@@ -1104,7 +1104,7 @@ void ExprEngine::defaultEvalCall(NodeBuilder &Bldr, ExplodedNode *Pred,
                                           false, &isNew)) {
             N->addPredecessor(Pred, G);
             if (isNew)
-              Engine.getForeignWorkList()->enqueue(
+              Engine.getCTUWorkList()->enqueue(
                   N, this->currBldrCtx->getBlock(), this->currStmtIdx);
           }
 

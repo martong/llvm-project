@@ -26,7 +26,7 @@
 // b/c that happens in another TU.
 
 // During the onego CTU analysis, we start with c() as top level function.
-// Then we visit b() as non-toplevel during the processing of the FWList, thus
+// Then we visit b() as non-toplevel during the processing of the CTUWList, thus
 // that would not be visited as toplevel without special care.
 
 // `c` is analyzed as toplevel and during that the other TU is loaded:
