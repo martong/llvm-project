@@ -77,7 +77,7 @@ static std::unique_ptr<WorkList> generateWorkList(AnalyzerOptions &Opts) {
 CoreEngine::CoreEngine(ExprEngine &exprengine, FunctionSummariesTy *FS,
                        AnalyzerOptions &Opts)
     : ExprEng(exprengine), WList(generateWorkList(Opts)),
-      FWList(generateWorkList(Opts)), BCounterFactory(G.getAllocator()),
+      CTUWList(generateWorkList(Opts)), BCounterFactory(G.getAllocator()),
       FunctionSummaries(FS) {}
 
 /// ExecuteWorkList - Run the worklist algorithm for a maximum number of steps.
@@ -106,8 +106,8 @@ bool CoreEngine::ExecuteWorkList(const LocationContext *L, unsigned MaxSteps,
 
     // Set the current block counter to being empty.
     WList->setBlockCounter(BCounterFactory.GetEmptyCounter());
-    if (FWList)
-        FWList->setBlockCounter(BCounterFactory.GetEmptyCounter());
+    if (CTUWList)
+        CTUWList->setBlockCounter(BCounterFactory.GetEmptyCounter());
 
     if (!InitState)
       InitState = ExprEng.getInitialState(L);
@@ -150,8 +150,8 @@ bool CoreEngine::ExecuteWorkList(const LocationContext *L, unsigned MaxSteps,
 
       // Set the current block counter.
       WList->setBlockCounter(WU.getBlockCounter());
-      if (FWList)
-        FWList->setBlockCounter(WU.getBlockCounter());
+      if (CTUWList)
+        CTUWList->setBlockCounter(WU.getBlockCounter());
 
       // Retrieve the node.
       ExplodedNode *Node = WU.getNode();
@@ -172,7 +172,7 @@ bool CoreEngine::ExecuteWorkList(const LocationContext *L, unsigned MaxSteps,
       this->ExprEng.getAnalysisManager().options.CTUMaxNodesMultiplier;
   unsigned MaxCTUSteps = std::max(STUSteps * Mul / 100, MinCTUSteps);
 
-  WList = std::move(FWList);
+  WList = std::move(CTUWList);
   const unsigned CTUSteps = ProcessWList(MaxCTUSteps);
   NumCTUSteps += CTUSteps;
 
@@ -313,8 +313,8 @@ void CoreEngine::HandleBlockEntrance(const BlockEntrance &L,
   Counter = BCounterFactory.IncrementCount(Counter, LC->getStackFrame(),
                                            BlockId);
   WList->setBlockCounter(Counter);
-  if (FWList)
-    FWList->setBlockCounter(Counter);
+  if (CTUWList)
+    CTUWList->setBlockCounter(Counter);
 
   // Process the entrance of the block.
   if (Optional<CFGElement> E = L.getFirstElement()) {

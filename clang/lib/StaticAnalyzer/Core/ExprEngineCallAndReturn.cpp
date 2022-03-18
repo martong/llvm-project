@@ -424,8 +424,8 @@ namespace {
     DynamicDispatchModeConservative
   };
   enum CTUDispatchMode {
-    CTUDispatchModeInline = 1, // Inline on the spot, eagerly.
-    CTUDispatchModeDeferred    // Inline the CTU function later.
+    CTUDispatchModeInlined = 1,
+    CTUDispatchModeConservative
   };
 } // end anonymous namespace
 
@@ -433,11 +433,30 @@ REGISTER_MAP_WITH_PROGRAMSTATE(DynamicDispatchBifurcationMap,
                                const MemRegion *, unsigned)
 // FIXME this could be a simple set.
 REGISTER_MAP_WITH_PROGRAMSTATE(CTUDispatchBifurcationMap,
-                               const Expr *, unsigned)
+                               const Decl *, unsigned)
 
-// FIXME make the return value to `void`. There is only one return path with
-// `true`.
-bool ExprEngine::inlineCall(const CallEvent &Call, const Decl *D,
+bool ExprEngine::ctuBifurcate(const CallEvent &Call, const Decl *D,
+                            NodeBuilder &Bldr, ExplodedNode *Pred,
+                            ProgramStateRef State) {
+  ProgramStateRef ConservativeEvalState = nullptr;
+  WorkList *CTUWList = Engine.getCTUWorkList();
+  if (Call.isForeign() && CTUWList) {
+    const unsigned *BState = State->get<CTUDispatchBifurcationMap>(D);
+    if (!BState) {
+      inlineCall(CTUWList, Call, D, Bldr, Pred, State);
+      ConservativeEvalState = State->set<CTUDispatchBifurcationMap>(
+            D, CTUDispatchModeConservative);
+      conservativeEvalCall(Call, Bldr, Pred, ConservativeEvalState);
+    } else if (*BState == CTUDispatchModeConservative) {
+      conservativeEvalCall(Call, Bldr, Pred, State);
+    }
+    return true;
+  }
+  inlineCall(Engine.getWorkList(), Call, D, Bldr, Pred, State);
+  return true;
+}
+
+bool ExprEngine::inlineCall(WorkList *WList, const CallEvent &Call, const Decl *D,
                             NodeBuilder &Bldr, ExplodedNode *Pred,
                             ProgramStateRef State) {
   assert(D);
@@ -466,41 +485,15 @@ bool ExprEngine::inlineCall(const CallEvent &Call, const Decl *D,
 
   CallEnter Loc(CallE, CalleeSFC, CurLC);
 
-  ProgramStateRef DeferredState = nullptr;
-  //ProgramStateRef InlineState = nullptr;
-  if (Call.isForeign() && Engine.getForeignWorkList()) {
-    const unsigned *BState = State->get<CTUDispatchBifurcationMap>(CallE);
-    if (!BState) {
-        DeferredState = State->set<CTUDispatchBifurcationMap>(
-            CallE, CTUDispatchModeDeferred);
-    }
-    else
-      // We are already on the conservative path.
-      DeferredState = State;
-  }
-
-  // Use either the DeferredState or the InlineState from now on.
-  ProgramStateRef InlineState = State;
-
   // Construct a new state which contains the mapping from actual to
   // formal arguments.
-  InlineState = InlineState->enterStackFrame(Call, CalleeSFC);
+  State = State->enterStackFrame(Call, CalleeSFC);
 
   bool isNew;
-  if (ExplodedNode *N = G.getNode(Loc, InlineState, false, &isNew)) {
-    if (DeferredState) {
-      if (DeferredState !=
-          State) { // This is the first time we saw the foreign CallExpr.
-        N->addPredecessor(Pred, G);
-        if (isNew)
-          Engine.getForeignWorkList()->enqueue(N);
-      }
-      conservativeEvalCall(Call, Bldr, Pred, DeferredState);
-      return true;
-    }
+  if (ExplodedNode *N = G.getNode(Loc, State, false, &isNew)) {
     N->addPredecessor(Pred, G);
     if (isNew)
-      Engine.getWorkList()->enqueue(N);
+      WList->enqueue(N);
   }
 
   // If we decided to inline the call, the successor has been manually
@@ -510,14 +503,15 @@ bool ExprEngine::inlineCall(const CallEvent &Call, const Decl *D,
   NumInlinedCalls++;
   Engine.FunctionSummaries->bumpNumTimesInlined(D);
 
-  // Do not mark as visited in the 2nd run (FWList), so the function will
+  // Do not mark as visited in the 2nd run (CTUWList), so the function will
   // be visited as top-level, this way we won't loose reports in non-ctu
   // mode. Considering the case when a function in a foreign TU calls back
   // into the main TU.
   // Note, during the 1st run, it doesn't matter if we mark the foreign
   // functions as visited (or not) because they can never appear as a top level
   // function in the main TU.
-  if (Engine.getForeignWorkList())
+  if (Engine.getCTUWorkList())
+    // Mark the decl as visited.
     if (VisitedCallees)
       VisitedCallees->insert(D);
 
@@ -1130,7 +1124,7 @@ void ExprEngine::defaultEvalCall(NodeBuilder &Bldr, ExplodedNode *Pred,
       }
 
       // We are not bifurcating and we do have a Decl, so just inline.
-      if (inlineCall(*Call, D, Bldr, Pred, State))
+      if (ctuBifurcate(*Call, D, Bldr, Pred, State))
         return;
     }
   }
@@ -1153,7 +1147,7 @@ void ExprEngine::BifurcateCall(const MemRegion *BifurReg,
   if (BState) {
     // If we are on "inline path", keep inlining if possible.
     if (*BState == DynamicDispatchModeInlined)
-      if (inlineCall(Call, D, Bldr, Pred, State))
+      if (ctuBifurcate(Call, D, Bldr, Pred, State))
         return;
     // If inline failed, or we are on the path where we assume we
     // don't have enough info about the receiver to inline, conjure the
@@ -1167,7 +1161,7 @@ void ExprEngine::BifurcateCall(const MemRegion *BifurReg,
   ProgramStateRef IState =
       State->set<DynamicDispatchBifurcationMap>(BifurReg,
                                                DynamicDispatchModeInlined);
-  inlineCall(Call, D, Bldr, Pred, IState);
+  ctuBifurcate(Call, D, Bldr, Pred, IState);
 
   ProgramStateRef NoIState =
       State->set<DynamicDispatchBifurcationMap>(BifurReg,
