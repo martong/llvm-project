@@ -1,0 +1,2 @@
+c:@F@other# ctu-onego-indirect-other.cpp.ast
+c:@F@bar# ctu-onego-indirect-other.cpp.ast
