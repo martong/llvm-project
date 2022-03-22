@@ -805,6 +805,8 @@ private:
                         const ExplodedNode *Pred,
                         const EvalCallOptions &CallOpts = {});
 
+  bool shouldChangeFunctionSummaries(const Decl *D);
+
   bool inlineCall(WorkList *WList, const CallEvent &Call, const Decl *D,
                   NodeBuilder &Bldr, ExplodedNode *Pred, ProgramStateRef State);
 

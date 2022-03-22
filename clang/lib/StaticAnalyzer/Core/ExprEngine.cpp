@@ -2012,7 +2012,8 @@ void ExprEngine::processCFGBlockEntrance(const BlockEdge &L,
     const LocationContext *RootLC =
                         (*G.roots_begin())->getLocation().getLocationContext();
     if (RootLC->getStackFrame() != CalleeSF) {
-      Engine.FunctionSummaries->markReachedMaxBlockCount(CalleeSF->getDecl());
+      if (shouldChangeFunctionSummaries(CalleeSF->getDecl()))
+        Engine.FunctionSummaries->markReachedMaxBlockCount(CalleeSF->getDecl());
 
       // Re-run the call evaluation without inlining it, by storing the
       // no-inlining policy in the state and enqueuing the new work item on
