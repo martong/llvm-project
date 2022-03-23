@@ -30,11 +30,15 @@ void clang_analyzer_eval();
 
 struct evp_md_ctx_st;
 int b(struct evp_md_ctx_st *, const int*);
-struct evp_md_st;
-struct evp_md_st *EVP_MD_fetch();
+struct evp_md_ctx_st *EVP_MD_fetch();
 int BN_generate_dsa_nonce(struct evp_md_ctx_st *X) {
   unsigned done = 0;
   EVP_MD_fetch();
+  // FIXME Below both ctu and nonctu should give the same warning. The reason
+  // for the difference is that during ctu we import evp_md_ctx_st which has a
+  // function pointer as a member, thus that is considered as a callback, thus
+  // all arguments of the below call will be invalided (regardless of being
+  // `const int*`).
   b(X, &done);
   // nonctu-warning@+2{{TRUE}}
   // ctu-warning@+1{{UNKNOWN}}
