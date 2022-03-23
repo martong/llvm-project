@@ -6,18 +6,14 @@
 
 // RUN: %clang_analyze_cc1 -triple x86_64-pc-linux-gnu \
 // RUN:   -analyzer-checker=core,debug.ExprInspection \
-// RUN:   -analyzer-checker=alpha.unix.cstring.OutOfBounds \
-// RUN:   -analyzer-config eagerly-assume=true \
+// RUN:   -analyzer-config eagerly-assume=false \
 // RUN:   -analyzer-config experimental-enable-naive-ctu-analysis=true \
 // RUN:   -analyzer-config ctu-dir=%t/ctudir \
 // RUN:   -analyzer-config display-ctu-progress=true \
 // RUN:   -Wno-pointer-sign \
 // RUN:   -verify=ctu %s
-// ctu-no-diagnostics
 // RUN: %clang_analyze_cc1 -triple x86_64-pc-linux-gnu \
 // RUN:   -analyzer-checker=core,debug.ExprInspection \
-// RUN:   -analyzer-checker=alpha.unix.cstring.OutOfBounds \
-// RUN:   -analyzer-config eagerly-assume=true \
 // RUN:   -analyzer-config experimental-enable-naive-ctu-analysis=true \
 // RUN:   -analyzer-config ctu-dir=%t/ctudir \
 // RUN:   -analyzer-config display-ctu-progress=true \
@@ -26,35 +22,22 @@
 
 // RUN: %clang_analyze_cc1 -triple x86_64-pc-linux-gnu \
 // RUN:   -analyzer-checker=core,debug.ExprInspection \
-// RUN:   -analyzer-checker=alpha.unix.cstring.OutOfBounds \
-// RUN:   -analyzer-config eagerly-assume=true \
+// RUN:   -analyzer-config eagerly-assume=false \
 // RUN:   -Wno-pointer-sign \
 // RUN:   -verify=nonctu %s
 
+void clang_analyzer_eval();
 
-typedef struct evp_md_ctx_st a;
-int b(a *, const int*);
-int c();
-int f();
-int k_bytes();
+struct evp_md_ctx_st;
+int b(struct evp_md_ctx_st *, const int*);
 struct evp_md_st;
 struct evp_md_st *EVP_MD_fetch();
-int e();
-void *memcpy(void *, const void *, unsigned long);
-int BN_generate_dsa_nonce() {
-  c();
-  char digest[64];
-  unsigned done, todo, d = f() + 8;
-  k_bytes();
+int BN_generate_dsa_nonce(struct evp_md_ctx_st *X) {
+  unsigned done = 0;
   EVP_MD_fetch();
-  done = 0;
-  for (;;) {
-    b((a*)c, &done) || e(digest);
-    todo = d - done;
-    if (todo > 4)
-      todo = 64;
-    // nonctu-warning@+1{{alpha.unix.cstring.OutOfBounds}}
-    memcpy((char*)k_bytes + done, digest, todo);
-    done = todo;
-  }
+  b(X, &done);
+  // nonctu-warning@+2{{TRUE}}
+  // ctu-warning@+1{{UNKNOWN}}
+  clang_analyzer_eval(done == 0);
+  return 0;
 }
