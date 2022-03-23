@@ -41,6 +41,7 @@ class LabelDecl;
 namespace ento {
 
 class FunctionSummariesTy;
+class CombinedFunctionSummariesTy;
 class ExprEngine;
 
 //===----------------------------------------------------------------------===//
@@ -95,7 +96,7 @@ private:
 
   /// The information about functions shared by the whole translation unit.
   /// (This data is owned by AnalysisConsumer.)
-  FunctionSummariesTy *FunctionSummaries;
+  std::unique_ptr<CombinedFunctionSummariesTy> FunctionSummaries;
 
   /// Add path tags with some useful data along the path when we see that
   /// something interesting is happening. This field is the allocator for such
@@ -132,7 +133,8 @@ private:
 public:
   /// Construct a CoreEngine object to analyze the provided CFG.
   CoreEngine(ExprEngine &exprengine,
-             FunctionSummariesTy *FS,
+             FunctionSummariesTy *STUFS,
+             FunctionSummariesTy *CTUFS,
              AnalyzerOptions &Opts);
 
   CoreEngine(const CoreEngine &) = delete;

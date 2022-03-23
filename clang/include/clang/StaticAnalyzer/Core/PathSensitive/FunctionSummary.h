@@ -136,6 +136,56 @@ public:
   unsigned getTotalNumVisitedBasicBlocks();
 };
 
+class CombinedFunctionSummariesTy {
+  FunctionSummariesTy *STUFS = nullptr;
+  FunctionSummariesTy *CTUFS = nullptr;
+  bool CTURun = false;
+
+public:
+  CombinedFunctionSummariesTy(FunctionSummariesTy *STUFS,
+                              FunctionSummariesTy *CTUFS)
+      : STUFS(STUFS), CTUFS(CTUFS) {}
+  void setCtuRun() { CTURun = true; }
+
+  // Inlining related data might affect the analyzer behaviour, so we do
+  // collect them separatly for the single and cross tu runs.
+  void markMayInline(const Decl *D) {
+    CTURun ? CTUFS->markMayInline(D) : STUFS->markMayInline(D);
+  }
+  void markShouldNotInline(const Decl *D) {
+    CTURun ? CTUFS->markShouldNotInline(D) : STUFS->markShouldNotInline(D);
+  }
+  void markReachedMaxBlockCount(const Decl *D) {
+    CTURun ? CTUFS->markReachedMaxBlockCount(D) : STUFS->markReachedMaxBlockCount(D);
+  }
+  void bumpNumTimesInlined(const Decl *D) {
+    CTURun ? CTUFS->bumpNumTimesInlined(D) : STUFS->bumpNumTimesInlined(D);
+  }
+  Optional<bool> mayInline(const Decl *D) {
+    Optional<bool> S = STUFS->mayInline(D);
+    if (!CTURun)
+      return S;
+    // FIXME track ReachedMaxBlockCount separately?
+    Optional<bool> C = CTUFS->mayInline(D);
+    if (S.hasValue() && C.hasValue())
+      return *S && *C;
+    if (S.hasValue())
+      return *S;
+    return C;
+  }
+  unsigned getNumTimesInlined(const Decl *D) {
+    if (!CTURun)
+      return STUFS->getNumTimesInlined(D);
+    return STUFS->getNumTimesInlined(D) + CTUFS->getNumTimesInlined(D);
+  }
+
+  // This is only needed for statistics. We can collect them commonly for both
+  // STU and CTU.
+  void markVisitedBasicBlock(unsigned ID, const Decl* D, unsigned TotalIDs) {
+    STUFS->markVisitedBasicBlock(ID, D, TotalIDs);
+  }
+};
+
 } // namespace ento
 } // namespace clang
 

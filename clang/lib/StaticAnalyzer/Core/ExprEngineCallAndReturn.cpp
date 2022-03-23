@@ -995,16 +995,6 @@ bool ExprEngine::mayInlineDecl(AnalysisDeclContext *CalleeADC) const {
   return true;
 }
 
-bool ExprEngine::shouldChangeFunctionSummaries(const Decl *D) {
-  // Do change the function summaries (that affect the inlining decision) only
-  // during the first WList execution (STU) or during the second run but only
-  // for newly created/imported functions.
-  // FIXME This is currently error-prone and might change the analysis
-  // behaviour of CTU in a wrong way. We should have an interface for
-  // `FunctionSummary` and a specialized derived class for CTU.
-  return Engine.getCTUWorkList() || CTU.isImportedAsNew(D);
-}
-
 bool ExprEngine::shouldInlineCall(const CallEvent &Call, const Decl *D,
                                   const ExplodedNode *Pred,
                                   const EvalCallOptions &CallOpts) {

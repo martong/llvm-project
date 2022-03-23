@@ -119,7 +119,8 @@ public:
 
   /// The information about analyzed functions shared throughout the
   /// translation unit.
-  FunctionSummariesTy FunctionSummaries;
+  FunctionSummariesTy STUFunctionSummaries;
+  FunctionSummariesTy CTUFunctionSummaries;
 
   AnalysisConsumer(CompilerInstance &CI, const std::string &outdir,
                    AnalyzerOptionsRef opts, ArrayRef<std::string> plugins,
@@ -621,12 +622,12 @@ void AnalysisConsumer::HandleTranslationUnit(ASTContext &C) {
   runAnalysisOnTranslationUnit(C);
 
   // Count how many basic blocks we have not covered.
-  NumBlocksInAnalyzedFunctions = FunctionSummaries.getTotalNumBasicBlocks();
+  NumBlocksInAnalyzedFunctions = STUFunctionSummaries.getTotalNumBasicBlocks();
   NumVisitedBlocksInAnalyzedFunctions =
-      FunctionSummaries.getTotalNumVisitedBasicBlocks();
+      STUFunctionSummaries.getTotalNumVisitedBasicBlocks();
   if (NumBlocksInAnalyzedFunctions > 0)
     PercentReachableBlocks =
-        (FunctionSummaries.getTotalNumVisitedBasicBlocks() * 100) /
+        (STUFunctionSummaries.getTotalNumVisitedBasicBlocks() * 100) /
         NumBlocksInAnalyzedFunctions;
 }
 
@@ -725,7 +726,8 @@ void AnalysisConsumer::RunPathSensitiveChecks(Decl *D,
   if (!Mgr->getAnalysisDeclContext(D)->getAnalysis<RelaxedLiveVariables>())
     return;
 
-  ExprEngine Eng(CTU, *Mgr, VisitedCallees, &FunctionSummaries, IMode);
+  ExprEngine Eng(CTU, *Mgr, VisitedCallees, &STUFunctionSummaries,
+                 &CTUFunctionSummaries, IMode);
 
   // Execute the worklist algorithm.
   llvm::TimeRecord ExprEngineStartTime;

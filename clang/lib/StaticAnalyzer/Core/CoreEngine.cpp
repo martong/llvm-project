@@ -74,11 +74,12 @@ static std::unique_ptr<WorkList> generateWorkList(AnalyzerOptions &Opts) {
   llvm_unreachable("Unknown AnalyzerOptions::ExplorationStrategyKind");
 }
 
-CoreEngine::CoreEngine(ExprEngine &exprengine, FunctionSummariesTy *FS,
-                       AnalyzerOptions &Opts)
+CoreEngine::CoreEngine(ExprEngine &exprengine, FunctionSummariesTy *STUFS,
+                       FunctionSummariesTy *CTUFS, AnalyzerOptions &Opts)
     : ExprEng(exprengine), WList(generateWorkList(Opts)),
       CTUWList(generateWorkList(Opts)), BCounterFactory(G.getAllocator()),
-      FunctionSummaries(FS) {}
+      FunctionSummaries(
+          std::make_unique<CombinedFunctionSummariesTy>(STUFS, CTUFS)) {}
 
 /// ExecuteWorkList - Run the worklist algorithm for a maximum number of steps.
 bool CoreEngine::ExecuteWorkList(const LocationContext *L, unsigned MaxSteps,
@@ -173,6 +174,7 @@ bool CoreEngine::ExecuteWorkList(const LocationContext *L, unsigned MaxSteps,
   unsigned MaxCTUSteps = std::max(STUSteps * Mul / 100, MinCTUSteps);
 
   WList = std::move(CTUWList);
+  FunctionSummaries->setCtuRun();
   const unsigned CTUSteps = ProcessWList(MaxCTUSteps);
   NumCTUSteps += CTUSteps;
 

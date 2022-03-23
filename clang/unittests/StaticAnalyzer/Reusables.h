@@ -50,7 +50,8 @@ private:
   PathDiagnosticConsumers Consumers;
   AnalysisManager AMgr;
   SetOfConstDecls VisitedCallees;
-  FunctionSummariesTy FS;
+  FunctionSummariesTy SFS;
+  FunctionSummariesTy CFS;
 
 protected:
   ExprEngine Eng;
@@ -63,8 +64,8 @@ public:
         AMgr(C.getASTContext(), C.getPreprocessor(), Consumers,
              CreateRegionStoreManager, CreateRangeConstraintManager, &ChkMgr,
              *C.getAnalyzerOpts()),
-        VisitedCallees(), FS(),
-        Eng(CTU, AMgr, &VisitedCallees, &FS, ExprEngine::Inline_Regular) {}
+        VisitedCallees(), SFS(), CFS(),
+        Eng(CTU, AMgr, &VisitedCallees, &SFS, &CFS, ExprEngine::Inline_Regular) {}
 };
 
 struct ExpectedLocationTy {

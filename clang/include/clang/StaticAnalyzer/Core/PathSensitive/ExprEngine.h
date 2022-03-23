@@ -178,8 +178,8 @@ private:
 
 public:
   ExprEngine(cross_tu::CrossTranslationUnitContext &CTU, AnalysisManager &mgr,
-             SetOfConstDecls *VisitedCalleesIn,
-             FunctionSummariesTy *FS, InliningModes HowToInlineIn);
+             SetOfConstDecls *VisitedCalleesIn, FunctionSummariesTy *STUFS,
+             FunctionSummariesTy *CTUFS, InliningModes HowToInlineIn);
 
   virtual ~ExprEngine() = default;
 
@@ -804,8 +804,6 @@ private:
   bool shouldInlineCall(const CallEvent &Call, const Decl *D,
                         const ExplodedNode *Pred,
                         const EvalCallOptions &CallOpts = {});
-
-  bool shouldChangeFunctionSummaries(const Decl *D);
 
   bool inlineCall(WorkList *WList, const CallEvent &Call, const Decl *D,
                   NodeBuilder &Bldr, ExplodedNode *Pred, ProgramStateRef State);

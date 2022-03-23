@@ -202,11 +202,12 @@ static const char* TagProviderName = "ExprEngine";
 ExprEngine::ExprEngine(cross_tu::CrossTranslationUnitContext &CTU,
                        AnalysisManager &mgr,
                        SetOfConstDecls *VisitedCalleesIn,
-                       FunctionSummariesTy *FS,
+                       FunctionSummariesTy *STUFS,
+                       FunctionSummariesTy *CTUFS,
                        InliningModes HowToInlineIn)
     : CTU(CTU), AMgr(mgr),
       AnalysisDeclContexts(mgr.getAnalysisDeclContextManager()),
-      Engine(*this, FS, mgr.getAnalyzerOptions()), G(Engine.getGraph()),
+      Engine(*this, STUFS, CTUFS, mgr.getAnalyzerOptions()), G(Engine.getGraph()),
       StateMgr(getContext(), mgr.getStoreManagerCreator(),
                mgr.getConstraintManagerCreator(), G.getAllocator(),
                this),
@@ -2012,8 +2013,7 @@ void ExprEngine::processCFGBlockEntrance(const BlockEdge &L,
     const LocationContext *RootLC =
                         (*G.roots_begin())->getLocation().getLocationContext();
     if (RootLC->getStackFrame() != CalleeSF) {
-      if (shouldChangeFunctionSummaries(CalleeSF->getDecl()))
-        Engine.FunctionSummaries->markReachedMaxBlockCount(CalleeSF->getDecl());
+      Engine.FunctionSummaries->markReachedMaxBlockCount(CalleeSF->getDecl());
 
       // Re-run the call evaluation without inlining it, by storing the
       // no-inlining policy in the state and enqueuing the new work item on
