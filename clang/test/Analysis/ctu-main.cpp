@@ -168,6 +168,20 @@ int main() {
   // expected-warning@Inputs/ctu-other.cpp:93{{REACHABLE}}
   MACRODIAG(); // expected-warning{{REACHABLE}}
 
+  // FIXME we should report an UNKNOWN as well for all external variables!
+  clang_analyzer_eval(extInt == 2); // expected-warning{{TRUE}}
+  clang_analyzer_eval(intns::extInt == 3); // expected-warning{{TRUE}}
+  clang_analyzer_eval(extS.a == 4); // expected-warning{{TRUE}}
+  clang_analyzer_eval(extHere == 6); // expected-warning{{TRUE}}
+  clang_analyzer_eval(A::a == 3); // expected-warning{{TRUE}}
+  clang_analyzer_eval(extSC.a == 8); // expected-warning{{TRUE}}
+  clang_analyzer_eval(ST::sc.a == 2); // expected-warning{{TRUE}}
+  // clang_analyzer_eval(extSCN.scn.a == 9); // TODO
+  clang_analyzer_eval(extSubSCN.a == 1); // expected-warning{{TRUE}}
+  // clang_analyzer_eval(extSCC.a == 7); // TODO
+  clang_analyzer_eval(extU.a == 4); // expected-warning{{TRUE}}
+  clang_analyzer_eval(TestAnonUnionUSR::Test == 5); // expected-warning{{TRUE}}
+
   clang_analyzer_eval(testImportOfIncompleteDefaultParmDuringImport(9) == 9);
   // expected-warning@-1{{TRUE}} ctu
   // expected-warning@-2{{UNKNOWN}} stu

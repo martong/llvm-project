@@ -285,7 +285,6 @@ public:
   }
 
   bool VisitVarDecl(VarDecl *VD) {
-    return true;
     if (!Opts->IsNaiveCTUEnabled)
       return true;
 
