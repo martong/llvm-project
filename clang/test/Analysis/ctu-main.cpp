@@ -75,6 +75,12 @@ struct S {
   int a;
 };
 extern const S extS;
+struct NonTrivialS {
+  int a;
+  // User declaring a dtor makes it non-trivial.
+  ~NonTrivialS();
+};
+extern const NonTrivialS extNTS;
 extern const int extHere;
 const int extHere = 6;
 struct A {
@@ -83,9 +89,9 @@ struct A {
 struct SC {
   const int a;
 };
-extern SC extSC;
+extern const SC extSC;
 struct ST {
-  static struct SC sc;
+  static const struct SC sc;
 };
 struct SCNest {
   struct SCN {
@@ -93,7 +99,7 @@ struct SCNest {
   } scn;
 };
 extern SCNest extSCN;
-extern SCNest::SCN extSubSCN;
+extern const SCNest::SCN extSubSCN;
 struct SCC {
   SCC(int c);
   const int a;
@@ -103,7 +109,7 @@ union U {
   const int a;
   const unsigned int b;
 };
-extern U extU;
+extern const U extU;
 
 void test_virtual_functions(mycls* obj) {
   // The dynamic type is known.
@@ -172,6 +178,8 @@ int main() {
   clang_analyzer_eval(extInt == 2); // expected-warning{{TRUE}}
   clang_analyzer_eval(intns::extInt == 3); // expected-warning{{TRUE}}
   clang_analyzer_eval(extS.a == 4); // expected-warning{{TRUE}}
+  // Do not import non-trivial classes' initializers.
+  clang_analyzer_eval(extNTS.a == 4); // expected-warning{{UNKNOWN}}
   clang_analyzer_eval(extHere == 6); // expected-warning{{TRUE}}
   clang_analyzer_eval(A::a == 3); // expected-warning{{TRUE}}
   clang_analyzer_eval(extSC.a == 8); // expected-warning{{TRUE}}
