@@ -75,7 +75,7 @@ static std::unique_ptr<WorkList> generateWorkList(AnalyzerOptions &Opts) {
 CoreEngine::CoreEngine(ExprEngine &exprengine, FunctionSummariesTy *FS,
                        AnalyzerOptions &Opts)
     : ExprEng(exprengine), WList(generateWorkList(Opts)),
-      CTUWList(Opts.IsNaiveCTUEnabled ? generateWorkList(Opts) : nullptr),
+      CTUWList(Opts.IsNaiveCTUEnabled ? WorkList::makeCTUWorkList() : nullptr),
       BCounterFactory(G.getAllocator()), FunctionSummaries(FS) {}
 
 void CoreEngine::setBlockCounter(BlockCounter C) {

@@ -85,6 +85,7 @@ public:
   static std::unique_ptr<WorkList> makeUnexploredFirst();
   static std::unique_ptr<WorkList> makeUnexploredFirstPriorityQueue();
   static std::unique_ptr<WorkList> makeUnexploredFirstPriorityLocationQueue();
+  static std::unique_ptr<WorkList> makeCTUWorkList();
 };
 
 } // end ento namespace
