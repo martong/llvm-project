@@ -190,7 +190,9 @@ std::unique_ptr<WorkList> WorkList::makeUnexploredFirst() {
 }
 
 namespace {
+
 class UnexploredFirstPriorityQueue : public WorkList {
+protected:
   using BlockID = unsigned;
   using LocIdentifier = std::pair<BlockID, const StackFrameContext *>;
 
@@ -202,7 +204,7 @@ class UnexploredFirstPriorityQueue : public WorkList {
   // Compare by number of times the location was visited first (negated
   // to prefer less often visited locations), then by insertion time (prefer
   // expanding nodes inserted sooner first).
-  using QueuePriority = std::pair<int, unsigned long>;
+  using QueuePriority = std::pair<int, long>;
   using QueueItem = std::pair<WorkListUnit, QueuePriority>;
 
   struct ExplorationComparator {
@@ -213,7 +215,7 @@ class UnexploredFirstPriorityQueue : public WorkList {
 
   // Number of inserted nodes, used to emulate DFS ordering in the priority
   // queue when insertions are equal.
-  unsigned long Counter = 0;
+  long Counter = 0;
 
   // Number of times a current location was reached.
   VisitedTimesMap NumReached;
@@ -222,12 +224,7 @@ class UnexploredFirstPriorityQueue : public WorkList {
   llvm::PriorityQueue<QueueItem, std::vector<QueueItem>, ExplorationComparator>
       queue;
 
-public:
-  bool hasWork() const override {
-    return !queue.empty();
-  }
-
-  void enqueue(const WorkListUnit &U) override {
+  unsigned getNumVisited(const WorkListUnit &U) {
     const ExplodedNode *N = U.getNode();
     unsigned NumVisited = 0;
     if (auto BE = N->getLocation().getAs<BlockEntrance>()) {
@@ -236,7 +233,16 @@ public:
           N->getLocationContext()->getStackFrame());
       NumVisited = NumReached[LocId]++;
     }
+    return NumVisited;
+  }
 
+public:
+  bool hasWork() const override {
+    return !queue.empty();
+  }
+
+  void enqueue(const WorkListUnit &U) override {
+    unsigned NumVisited = getNumVisited(U);
     queue.push(std::make_pair(U, std::make_pair(-NumVisited, ++Counter)));
   }
 
@@ -246,10 +252,44 @@ public:
     return U.first;
   }
 };
+
+class CTUWorkList : public UnexploredFirstPriorityQueue {
+  enum class SecondaryOrder {
+    DFS = 1,
+    ReverseDFS
+  };
+  SecondaryOrder ScndOrd = SecondaryOrder::ReverseDFS;
+
+  long ReverseDFSCounter = 0;
+
+public:
+
+  void enqueue(const WorkListUnit &U) override {
+    unsigned NumVisited = getNumVisited(U);
+    queue.push(std::make_pair(
+        U, std::make_pair(-NumVisited, ScndOrd == SecondaryOrder::DFS
+                                           ? ++Counter
+                                           : --ReverseDFSCounter)));
+  }
+
+  WorkListUnit dequeue() override {
+    // During the first phase we never call dequeue(). Thus, the first call of
+    // dequeue() indicates the start of the second phase. We want to have the
+    // normal ordering during the second phase.
+    ScndOrd = SecondaryOrder::DFS;
+    return UnexploredFirstPriorityQueue::dequeue();
+  }
+
+};
+
 } // namespace
 
 std::unique_ptr<WorkList> WorkList::makeUnexploredFirstPriorityQueue() {
   return std::make_unique<UnexploredFirstPriorityQueue>();
+}
+
+std::unique_ptr<WorkList> WorkList::makeCTUWorkList() {
+  return std::make_unique<CTUWorkList>();
 }
 
 namespace {

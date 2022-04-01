@@ -77,7 +77,7 @@ static std::unique_ptr<WorkList> generateWorkList(AnalyzerOptions &Opts) {
 CoreEngine::CoreEngine(ExprEngine &exprengine, FunctionSummariesTy *FS,
                        AnalyzerOptions &Opts)
     : ExprEng(exprengine), WList(generateWorkList(Opts)),
-      CTUWList(generateWorkList(Opts)), BCounterFactory(G.getAllocator()),
+      CTUWList(WorkList::makeCTUWorkList()), BCounterFactory(G.getAllocator()),
       FunctionSummaries(FS) {}
 
 /// ExecuteWorkList - Run the worklist algorithm for a maximum number of steps.
