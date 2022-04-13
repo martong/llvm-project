@@ -320,18 +320,6 @@ llvm::Expected<const T *> CrossTranslationUnitContext::getCrossTUDefinitionImpl(
   return llvm::make_error<IndexError>(index_error_code::failed_import);
 }
 
-bool CrossTranslationUnitContext::hasCrossTUDefinition(const FunctionDecl *FD,
-                                                       StringRef CrossTUDir,
-                                                       StringRef IndexName) {
-  llvm::Expected<std::string> Name =
-      ASTStorage.getFileForDecl(FD, CrossTUDir, IndexName);
-  if (!Name) {
-    handleAllErrors(Name.takeError(), [&](const IndexError &) {});
-    return false;
-  }
-  return true;
-}
-
 llvm::Expected<const FunctionDecl *>
 CrossTranslationUnitContext::getCrossTUDefinition(const FunctionDecl *FD,
                                                   StringRef CrossTUDir,
@@ -436,8 +424,6 @@ CrossTranslationUnitContext::ASTUnitStorage::getASTUnitForFunction(
       return std::move(IndexLoadError);
 
     // Check if there is and entry in the index for the function.
-    // FIXME Use 'find' to get an iterator and use that here and later as well.
-    // We could spare one superflous lookup this way.
     if (!NameFileMap.count(FunctionName)) {
       ++NumNotInOtherTU;
       return llvm::make_error<IndexError>(index_error_code::missing_definition);
@@ -466,20 +452,7 @@ CrossTranslationUnitContext::ASTUnitStorage::getFileForFunction(
     StringRef FunctionName, StringRef CrossTUDir, StringRef IndexName) {
   if (llvm::Error IndexLoadError = ensureCTUIndexLoaded(CrossTUDir, IndexName))
     return std::move(IndexLoadError);
-  auto It = NameFileMap.find(FunctionName);
-  if (It == NameFileMap.end())
-    return llvm::make_error<IndexError>(index_error_code::missing_definition);
-  return It->getValue();
-}
-
-llvm::Expected<std::string>
-CrossTranslationUnitContext::ASTUnitStorage::getFileForDecl(
-    const NamedDecl *D, StringRef CrossTUDir, StringRef IndexName) {
-  const llvm::Optional<std::string> LookupName = getLookupName(D);
-  if (!LookupName)
-    return llvm::make_error<IndexError>(
-        index_error_code::failed_to_generate_usr);
-  return getFileForFunction(*LookupName, CrossTUDir, IndexName);
+  return NameFileMap[FunctionName];
 }
 
 llvm::Error CrossTranslationUnitContext::ASTUnitStorage::ensureCTUIndexLoaded(

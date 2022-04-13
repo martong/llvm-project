@@ -136,77 +136,6 @@ private:
   const unsigned OverrideLimit;
 };
 
-class HasCrossTUDefinitionConsumer : public clang::ASTConsumer {
-public:
-  explicit HasCrossTUDefinitionConsumer(clang::CompilerInstance &CI)
-      : CTU(CI) {}
-
-  void HandleTranslationUnit(ASTContext &Ctx) override {
-    auto FindFInTU = [](const TranslationUnitDecl *TU, StringRef Name) {
-      const FunctionDecl *FD = nullptr;
-      for (const Decl *D : TU->decls()) {
-        FD = dyn_cast<FunctionDecl>(D);
-        if (FD && FD->getName() == Name)
-          break;
-      }
-      return FD;
-    };
-
-    const TranslationUnitDecl *TU = Ctx.getTranslationUnitDecl();
-
-    // Prepare the index file and the AST file.
-    int ASTFD;
-    llvm::SmallString<256> ASTFileName;
-    ASSERT_FALSE(
-        llvm::sys::fs::createTemporaryFile("f_ast", "ast", ASTFD, ASTFileName));
-    llvm::ToolOutputFile ASTFile(ASTFileName, ASTFD);
-
-    int IndexFD;
-    llvm::SmallString<256> IndexFileName;
-    ASSERT_FALSE(llvm::sys::fs::createTemporaryFile("index", "txt", IndexFD,
-                                                    IndexFileName));
-    llvm::ToolOutputFile IndexFile(IndexFileName, IndexFD);
-    IndexFile.os() << "c:@F@f#I# " << ASTFileName << "\n";
-    IndexFile.os().flush();
-    EXPECT_TRUE(llvm::sys::fs::exists(IndexFileName));
-
-    StringRef SourceText = "int f(int) { return 0; }\n";
-    // This file must exist since the saved ASTFile will reference it.
-    int SourceFD;
-    llvm::SmallString<256> SourceFileName;
-    ASSERT_FALSE(llvm::sys::fs::createTemporaryFile("input", "cpp", SourceFD,
-                                                    SourceFileName));
-    llvm::ToolOutputFile SourceFile(SourceFileName, SourceFD);
-    SourceFile.os() << SourceText;
-    SourceFile.os().flush();
-    EXPECT_TRUE(llvm::sys::fs::exists(SourceFileName));
-
-    std::unique_ptr<ASTUnit> ASTWithDefinition =
-        tooling::buildASTFromCode(SourceText, SourceFileName);
-    ASTWithDefinition->Save(ASTFileName.str());
-    EXPECT_TRUE(llvm::sys::fs::exists(ASTFileName));
-
-    // Check that only 'f' has an external definition in the index.
-    const FunctionDecl *FD = FindFInTU(TU, "f");
-    assert(FD && FD->getName() == "f");
-    EXPECT_TRUE(CTU.hasCrossTUDefinition(FD, "", IndexFileName));
-    FD = FindFInTU(TU, "g");
-    assert(FD && FD->getName() == "g");
-    EXPECT_FALSE(CTU.hasCrossTUDefinition(FD, "", IndexFileName));
-  }
-
-private:
-  CrossTranslationUnitContext CTU;
-};
-
-class HasCrossTUDefinitionAction : public clang::ASTFrontendAction {
-protected:
-  std::unique_ptr<clang::ASTConsumer>
-  CreateASTConsumer(clang::CompilerInstance &CI, StringRef) override {
-    return std::make_unique<HasCrossTUDefinitionConsumer>(CI);
-  }
-};
-
 } // end namespace
 
 TEST(CrossTranslationUnit, CanLoadFunctionDefinition) {
@@ -221,12 +150,6 @@ TEST(CrossTranslationUnit, RespectsLoadThreshold) {
   EXPECT_TRUE(tooling::runToolOnCode(std::make_unique<CTUAction>(&Success, 0u),
                                      "int f(int);"));
   EXPECT_FALSE(Success);
-}
-
-TEST(CrossTranslationUnit, hasCrossTUDefinition) {
-  EXPECT_TRUE(
-      tooling::runToolOnCode(std::make_unique<HasCrossTUDefinitionAction>(),
-                             "int f(int); int g(int);"));
 }
 
 TEST(CrossTranslationUnit, IndexFormatCanBeParsed) {
