@@ -18,7 +18,6 @@ c:@F@other_macro_diag#I# ctu-other.cpp.ast
 c:@extInt ctu-other.cpp.ast
 c:@N@intns@extInt ctu-other.cpp.ast
 c:@extS ctu-other.cpp.ast
-c:@extNTS ctu-other.cpp.ast
 c:@S@A@a ctu-other.cpp.ast
 c:@extSC ctu-other.cpp.ast
 c:@S@ST@sc ctu-other.cpp.ast

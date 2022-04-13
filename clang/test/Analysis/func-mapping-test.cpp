@@ -23,7 +23,7 @@ extern S const s = {.a = 2};
 struct SF {
   const int a;
 };
-extern const SF sf = {.a = 2};
+SF sf = {.a = 2};
 // CHECK-DAG: c:@sf
 
 struct SStatic {
@@ -39,7 +39,7 @@ union U {
   const int a;
   const unsigned int b;
 };
-extern const U u = {.a = 6};
+U u = {.a = 6};
 // CHECK-DAG: c:@u
 
 // No USR can be generated for this.

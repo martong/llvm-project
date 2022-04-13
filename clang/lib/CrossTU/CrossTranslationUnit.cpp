@@ -191,9 +191,14 @@ createCrossTUIndexString(const llvm::StringMap<std::string> &Index) {
   return Result.str();
 }
 
-bool shouldImport(const VarDecl *VD, const ASTContext &ACtx) {
+bool containsConst(const VarDecl *VD, const ASTContext &ACtx) {
   CanQualType CT = ACtx.getCanonicalType(VD->getType());
-  return CT.isConstQualified() && VD->getType().isTrivialType(ACtx);
+  if (!CT.isConstQualified()) {
+    const RecordType *RTy = CT->getAs<RecordType>();
+    if (!RTy || !RTy->hasConstFields())
+      return false;
+  }
+  return true;
 }
 
 static bool hasBodyOrInit(const FunctionDecl *D, const FunctionDecl *&DefD) {
