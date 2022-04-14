@@ -7,6 +7,7 @@
 // RUN: cp %S/Inputs/ctu-other.cpp.externalDefMap.ast-dump.txt %t/ctudir/externalDefMap.txt
 // RUN: %clang_analyze_cc1 -std=c++14 -triple x86_64-pc-linux-gnu \
 // RUN:   -analyzer-checker=core,debug.ExprInspection \
+// RUN:   -analyzer-config eagerly-assume=false \
 // RUN:   -analyzer-config experimental-enable-naive-ctu-analysis=true \
 // RUN:   -analyzer-config ctu-dir=%t/ctudir \
 // RUN:   -verify %s
@@ -113,10 +114,13 @@ extern const U extU;
 
 void test_virtual_functions(mycls* obj) {
   // The dynamic type is known.
-  clang_analyzer_eval(mycls().fvcl(1) == 8);   // expected-warning{{TRUE}}
-  clang_analyzer_eval(derived().fvcl(1) == 9); // expected-warning{{TRUE}}
+  clang_analyzer_eval(mycls().fvcl(1) == 8);   // expected-warning{{TRUE}} ctu
+                                               // expected-warning@-1{{UNKNOWN}} stu
+  clang_analyzer_eval(derived().fvcl(1) == 9); // expected-warning{{TRUE}} ctu
+                                               // expected-warning@-1{{UNKNOWN}} stu
   // We cannot decide about the dynamic type.
-  clang_analyzer_eval(obj->fvcl(1) == 8);      // expected-warning{{FALSE}} expected-warning{{TRUE}}
+  clang_analyzer_eval(obj->fvcl(1) == 8);      // expected-warning{{TRUE}} ctu
+                                               // expected-warning@-1{{UNKNOWN}} ctu, stu
 }
 
 class TestAnonUnionUSR {
@@ -137,32 +141,47 @@ extern int testImportOfIncompleteDefaultParmDuringImport(int);
 extern int testImportOfDelegateConstructor(int);
 
 int main() {
-  clang_analyzer_eval(f(3) == 2); // expected-warning{{TRUE}}
-  clang_analyzer_eval(f(4) == 3); // expected-warning{{TRUE}}
-  clang_analyzer_eval(f(5) == 3); // expected-warning{{FALSE}}
-  clang_analyzer_eval(g(4) == 6); // expected-warning{{TRUE}}
-  clang_analyzer_eval(h(2) == 8); // expected-warning{{TRUE}}
+  clang_analyzer_eval(f(3) == 2); // expected-warning{{TRUE}} ctu
+                                  // expected-warning@-1{{UNKNOWN}} stu
+  clang_analyzer_eval(f(4) == 3); // expected-warning{{TRUE}} ctu
+                                  // expected-warning@-1{{UNKNOWN}} stu
+  clang_analyzer_eval(f(5) == 3); // expected-warning{{FALSE}} ctu
+                                  // expected-warning@-1{{UNKNOWN}} stu
+  clang_analyzer_eval(g(4) == 6); // expected-warning{{TRUE}} ctu
+                                  // expected-warning@-1{{UNKNOWN}} stu
+  clang_analyzer_eval(h(2) == 8); // expected-warning{{TRUE}} ctu
+                                  // expected-warning@-1{{UNKNOWN}} stu
 
-  clang_analyzer_eval(myns::fns(2) == 9);                   // expected-warning{{TRUE}}
-  clang_analyzer_eval(myns::embed_ns::fens(2) == -1);       // expected-warning{{TRUE}}
-  clang_analyzer_eval(mycls().fcl(1) == 6);                 // expected-warning{{TRUE}}
-  clang_analyzer_eval(mycls::fscl(1) == 7);                 // expected-warning{{TRUE}}
-  clang_analyzer_eval(myns::embed_cls().fecl(1) == -6);     // expected-warning{{TRUE}}
-  clang_analyzer_eval(mycls::embed_cls2().fecl2(0) == -11); // expected-warning{{TRUE}}
+  clang_analyzer_eval(myns::fns(2) == 9);                   // expected-warning{{TRUE}} ctu
+                                                            // expected-warning@-1{{UNKNOWN}} stu
+  clang_analyzer_eval(myns::embed_ns::fens(2) == -1);       // expected-warning{{TRUE}} ctu
+                                                            // expected-warning@-1{{UNKNOWN}} stu
+  clang_analyzer_eval(mycls().fcl(1) == 6);                 // expected-warning{{TRUE}} ctu
+                                                            // expected-warning@-1{{UNKNOWN}} stu
+  clang_analyzer_eval(mycls::fscl(1) == 7);                 // expected-warning{{TRUE}} ctu
+                                                            // expected-warning@-1{{UNKNOWN}} stu
+  clang_analyzer_eval(myns::embed_cls().fecl(1) == -6);     // expected-warning{{TRUE}} ctu
+                                                            // expected-warning@-1{{UNKNOWN}} stu
+  clang_analyzer_eval(mycls::embed_cls2().fecl2(0) == -11); // expected-warning{{TRUE}} ctu
+                                                            // expected-warning@-1{{UNKNOWN}} stu
 
-  clang_analyzer_eval(chns::chf1(4) == 12); // expected-warning{{TRUE}}
-  clang_analyzer_eval(fun_using_anon_struct(8) == 8); // expected-warning{{TRUE}}
+  clang_analyzer_eval(chns::chf1(4) == 12); // expected-warning{{TRUE}} ctu
+                                            // expected-warning@-1{{UNKNOWN}} stu
+  clang_analyzer_eval(fun_using_anon_struct(8) == 8); // expected-warning{{TRUE}} ctu
+                                                      // expected-warning@-1{{UNKNOWN}} stu
 
-  clang_analyzer_eval(other_macro_diag(1) == 1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(other_macro_diag(1) == 1); // expected-warning{{TRUE}} ctu
+                                                 // expected-warning@-1{{UNKNOWN}} stu
   // expected-warning@Inputs/ctu-other.cpp:93{{REACHABLE}}
   MACRODIAG(); // expected-warning{{REACHABLE}}
 
+  // FIXME we should report an UNKNOWN as well for all external variables!
   clang_analyzer_eval(extInt == 2); // expected-warning{{TRUE}}
   clang_analyzer_eval(intns::extInt == 3); // expected-warning{{TRUE}}
   clang_analyzer_eval(extS.a == 4); // expected-warning{{TRUE}}
-  clang_analyzer_eval(extNonConstS.a == 4); // expected-warning{{TRUE}} expected-warning{{FALSE}}
+  clang_analyzer_eval(extNonConstS.a == 4); // expected-warning{{UNKNOWN}}
   // Do not import non-trivial classes' initializers.
-  clang_analyzer_eval(extNTS.a == 4); // expected-warning{{TRUE}} expected-warning{{FALSE}}
+  clang_analyzer_eval(extNTS.a == 4); // expected-warning{{UNKNOWN}}
   clang_analyzer_eval(extHere == 6); // expected-warning{{TRUE}}
   clang_analyzer_eval(A::a == 3); // expected-warning{{TRUE}}
   clang_analyzer_eval(extSC.a == 8); // expected-warning{{TRUE}}
@@ -171,10 +190,13 @@ int main() {
   clang_analyzer_eval(extSubSCN.a == 1); // expected-warning{{TRUE}}
   // clang_analyzer_eval(extSCC.a == 7); // TODO
   clang_analyzer_eval(extU.a == 4); // expected-warning{{TRUE}}
-
   clang_analyzer_eval(TestAnonUnionUSR::Test == 5); // expected-warning{{TRUE}}
 
-  clang_analyzer_eval(testImportOfIncompleteDefaultParmDuringImport(9) == 9); // expected-warning{{TRUE}}
+  clang_analyzer_eval(testImportOfIncompleteDefaultParmDuringImport(9) == 9);
+  // expected-warning@-1{{TRUE}} ctu
+  // expected-warning@-2{{UNKNOWN}} stu
 
-  clang_analyzer_eval(testImportOfDelegateConstructor(10) == 10); // expected-warning{{TRUE}}
+  clang_analyzer_eval(testImportOfDelegateConstructor(10) == 10);
+  // expected-warning@-1{{TRUE}} ctu
+  // expected-warning@-2{{UNKNOWN}} stu
 }

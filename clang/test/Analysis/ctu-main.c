@@ -5,11 +5,20 @@
 // RUN: cp %S/Inputs/ctu-other.c.externalDefMap.ast-dump.txt %t/ctudir2/externalDefMap.txt
 // RUN: %clang_cc1 -triple x86_64-pc-linux-gnu -fsyntax-only -std=c89 -analyze \
 // RUN:   -analyzer-checker=core,debug.ExprInspection \
+// RUN:   -analyzer-config eagerly-assume=false \
 // RUN:   -analyzer-config experimental-enable-naive-ctu-analysis=true \
 // RUN:   -analyzer-config ctu-dir=%t/ctudir2 \
 // RUN:   -verify %s
 
 void clang_analyzer_eval(int);
+
+// A function that's definition is unknown both for single-tu (stu) and ctu
+// mode.
+int unknown(int);
+void test_unknown() {
+  int res = unknown(6);
+  clang_analyzer_eval(res == 6); // expected-warning{{UNKNOWN}}
+}
 
 // Test typedef and global variable in function.
 typedef struct {
@@ -18,8 +27,9 @@ typedef struct {
 } FooBar;
 extern FooBar fb;
 int f(int);
-void testGlobalVariable(void) {
-  clang_analyzer_eval(f(5) == 1);         // expected-warning{{TRUE}}
+void testGlobalVariable() {
+  clang_analyzer_eval(f(5) == 1);         // expected-warning{{TRUE}} ctu
+                                          // expected-warning@-1{{UNKNOWN}} stu
 }
 
 // Test enums.
@@ -29,7 +39,8 @@ enum A { x,
          z };
 void testEnum(void) {
   clang_analyzer_eval(x == 0);            // expected-warning{{TRUE}}
-  clang_analyzer_eval(enumCheck() == 42); // expected-warning{{TRUE}}
+  clang_analyzer_eval(enumCheck() == 42); // expected-warning{{TRUE}} ctu
+                                          // expected-warning@-1{{UNKNOWN}} stu
 }
 
 // Test that asm import does not fail.
@@ -49,7 +60,8 @@ void testMacro(void) {
 // warning:implicit functions are prohibited by c99
 void testImplicit(void) {
   int res = identImplicit(6);   // external implicit functions are not inlined
-  clang_analyzer_eval(res == 6); // expected-warning{{TRUE}}
+  clang_analyzer_eval(res == 6); // expected-warning{{TRUE}} ctu
+                                 // expected-warning@-1{{UNKNOWN}} stu
   // Call something with uninitialized from the same function in which the implicit was called.
   // This is necessary to reproduce a special bug in NoStoreFuncVisitor.
   int uninitialized;
@@ -67,7 +79,8 @@ void testStructDefInArgument(void) {
   struct DataType d;
   d.a = 1;
   d.b = 0;
-  clang_analyzer_eval(structInProto(&d) == 0); // expected-warning{{TRUE}} expected-warning{{FALSE}}
+  // Not imported, thus remains unknown both in stu and ctu.
+  clang_analyzer_eval(structInProto(&d) == 0); // expected-warning{{UNKNOWN}}
 }
 
 int switchWithoutCases(int);

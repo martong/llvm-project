@@ -427,10 +427,33 @@ namespace {
 
 REGISTER_MAP_WITH_PROGRAMSTATE(DynamicDispatchBifurcationMap,
                                const MemRegion *, unsigned)
+REGISTER_SET_WITH_PROGRAMSTATE(CTUDispatchBifurcationSet, const Decl *)
 
-bool ExprEngine::inlineCall(const CallEvent &Call, const Decl *D,
-                            NodeBuilder &Bldr, ExplodedNode *Pred,
-                            ProgramStateRef State) {
+bool ExprEngine::ctuBifurcate(const CallEvent &Call, const Decl *D,
+                              NodeBuilder &Bldr, ExplodedNode *Pred,
+                              ProgramStateRef State) {
+  ProgramStateRef ConservativeEvalState = nullptr;
+  WorkList *CTUWList = Engine.getCTUWorkList();
+  if (Call.isForeign() && CTUWList) {
+    const bool BState = State->contains<CTUDispatchBifurcationSet>(D);
+    if (!BState) { // This is the first time we see this foreign function.
+      // Enqueue it to be analyzed in the second (ctu) phase.
+      inlineCall(CTUWList, Call, D, Bldr, Pred, State);
+      // Conservatively evaluate in the first phase.
+      ConservativeEvalState = State->add<CTUDispatchBifurcationSet>(D);
+      conservativeEvalCall(Call, Bldr, Pred, ConservativeEvalState);
+    } else {
+      conservativeEvalCall(Call, Bldr, Pred, State);
+    }
+    return true;
+  }
+  inlineCall(Engine.getWorkList(), Call, D, Bldr, Pred, State);
+  return true;
+}
+
+bool ExprEngine::inlineCall(WorkList *WList, const CallEvent &Call,
+                            const Decl *D, NodeBuilder &Bldr,
+                            ExplodedNode *Pred, ProgramStateRef State) {
   assert(D);
 
   const LocationContext *CurLC = Pred->getLocationContext();
@@ -465,7 +488,7 @@ bool ExprEngine::inlineCall(const CallEvent &Call, const Decl *D,
   if (ExplodedNode *N = G.getNode(Loc, State, false, &isNew)) {
     N->addPredecessor(Pred, G);
     if (isNew)
-      Engine.getWorkList()->enqueue(N);
+      WList->enqueue(N);
   }
 
   // If we decided to inline the call, the successor has been manually
@@ -475,9 +498,17 @@ bool ExprEngine::inlineCall(const CallEvent &Call, const Decl *D,
   NumInlinedCalls++;
   Engine.FunctionSummaries->bumpNumTimesInlined(D);
 
-  // Mark the decl as visited.
-  if (VisitedCallees)
-    VisitedCallees->insert(D);
+  // Do not mark as visited in the 2nd run (CTUWList), so the function will
+  // be visited as top-level, this way we won't loose reports in non-ctu
+  // mode. Considering the case when a function in a foreign TU calls back
+  // into the main TU.
+  // Note, during the 1st run, it doesn't matter if we mark the foreign
+  // functions as visited (or not) because they can never appear as a top level
+  // function in the main TU.
+  if (Engine.getCTUWorkList())
+    // Mark the decl as visited.
+    if (VisitedCallees)
+      VisitedCallees->insert(D);
 
   return true;
 }
@@ -1068,6 +1099,7 @@ void ExprEngine::defaultEvalCall(NodeBuilder &Bldr, ExplodedNode *Pred,
     State = InlinedFailedState;
   } else {
     RuntimeDefinition RD = Call->getRuntimeDefinition();
+    Call->setForeign(RD.isForeign());
     const Decl *D = RD.getDecl();
     if (shouldInlineCall(*Call, D, Pred, CallOpts)) {
       if (RD.mayHaveOtherDefinitions()) {
@@ -1087,7 +1119,7 @@ void ExprEngine::defaultEvalCall(NodeBuilder &Bldr, ExplodedNode *Pred,
       }
 
       // We are not bifurcating and we do have a Decl, so just inline.
-      if (inlineCall(*Call, D, Bldr, Pred, State))
+      if (ctuBifurcate(*Call, D, Bldr, Pred, State))
         return;
     }
   }
@@ -1110,7 +1142,7 @@ void ExprEngine::BifurcateCall(const MemRegion *BifurReg,
   if (BState) {
     // If we are on "inline path", keep inlining if possible.
     if (*BState == DynamicDispatchModeInlined)
-      if (inlineCall(Call, D, Bldr, Pred, State))
+      if (ctuBifurcate(Call, D, Bldr, Pred, State))
         return;
     // If inline failed, or we are on the path where we assume we
     // don't have enough info about the receiver to inline, conjure the
@@ -1124,7 +1156,7 @@ void ExprEngine::BifurcateCall(const MemRegion *BifurReg,
   ProgramStateRef IState =
       State->set<DynamicDispatchBifurcationMap>(BifurReg,
                                                DynamicDispatchModeInlined);
-  inlineCall(Call, D, Bldr, Pred, IState);
+  ctuBifurcate(Call, D, Bldr, Pred, IState);
 
   ProgramStateRef NoIState =
       State->set<DynamicDispatchBifurcationMap>(BifurReg,

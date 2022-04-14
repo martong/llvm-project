@@ -113,12 +113,16 @@ class RuntimeDefinition {
   /// precise.
   const MemRegion *R = nullptr;
 
+  const bool Foreign = false; // From CTU.
+
 public:
   RuntimeDefinition() = default;
   RuntimeDefinition(const Decl *InD): D(InD) {}
+  RuntimeDefinition(const Decl *InD, bool Foreign) : D(InD), Foreign(Foreign) {}
   RuntimeDefinition(const Decl *InD, const MemRegion *InR): D(InD), R(InR) {}
 
   const Decl *getDecl() { return D; }
+  bool isForeign() const { return Foreign; }
 
   /// Check if the definition we have is precise.
   /// If not, it is possible that the call dispatches to another definition at
@@ -147,6 +151,7 @@ private:
   ProgramStateRef State;
   const LocationContext *LCtx;
   llvm::PointerUnion<const Expr *, const Decl *> Origin;
+  mutable Optional<bool> Foreign; // From CTU.
 
 protected:
   // This is user data for subclasses.
@@ -207,6 +212,12 @@ public:
   virtual const Decl *getDecl() const {
     return Origin.dyn_cast<const Decl *>();
   }
+
+  bool isForeign() const {
+    assert(Foreign.hasValue() && "Foreign must be set before querying");
+    return *Foreign;
+  }
+  void setForeign(bool B) const { Foreign = B; }
 
   /// The state in which the call is being evaluated.
   const ProgramStateRef &getState() const {
