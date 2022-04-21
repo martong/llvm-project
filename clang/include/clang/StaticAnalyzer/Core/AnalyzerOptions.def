@@ -427,6 +427,11 @@ ANALYZER_OPTION(
     "upper bound instead.", 1000)
 
 ANALYZER_OPTION(
+    bool, CTUInlineSmallFunctions, "ctu-inline-small-functions",
+    "Inline the small foreign functions during the first phase of the ctu "
+    "analysis.", false)
+
+ANALYZER_OPTION(
     unsigned, RegionStoreSmallStructLimit, "region-store-small-struct-limit",
     "The largest number of fields a struct can have and still be considered "
     "small This is currently used to decide whether or not it is worth forcing "

@@ -48,6 +48,7 @@
 // CHECK-NEXT: ctu-import-cpp-threshold = 8
 // CHECK-NEXT: ctu-import-threshold = 24
 // CHECK-NEXT: ctu-index-name = externalDefMap.txt
+// CHECK-NEXT: ctu-inline-small-functions = false
 // CHECK-NEXT: ctu-invocation-list = invocations.yaml
 // CHECK-NEXT: ctu-max-nodes-min = 1000
 // CHECK-NEXT: ctu-max-nodes-mul = 100

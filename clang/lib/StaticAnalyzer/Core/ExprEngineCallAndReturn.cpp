@@ -441,6 +441,12 @@ bool ExprEngine::ctuBifurcate(const CallEvent &Call, const Decl *D,
   ProgramStateRef ConservativeEvalState = nullptr;
   WorkList *CTUWList = Engine.getCTUWorkList();
   if (Call.isForeign() && CTUWList) {
+    // Do inline foreign functions if they are trivial.
+    if (AMgr.options.CTUInlineSmallFunctions &&
+        isSmall(AMgr.getAnalysisDeclContext(D))) {
+      inlineCall(Engine.getWorkList(), Call, D, Bldr, Pred, State);
+      return true;
+    }
     const unsigned *BState = State->get<CTUDispatchBifurcationMap>(D);
     if (!BState) {
       inlineCall(CTUWList, Call, D, Bldr, Pred, State);
