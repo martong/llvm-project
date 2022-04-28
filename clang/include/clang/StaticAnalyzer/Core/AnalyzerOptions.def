@@ -426,6 +426,13 @@ ANALYZER_OPTION(
     "upper bound instead.", 1000)
 
 ANALYZER_OPTION(
+    StringRef, CTUPhase1InliningMode, "ctu-phase1-inlining",
+    "Controls which functions will be inlined during the first phase of the ctu "
+    "analysis."
+    "Value: \"none\", \"small\", \"all\".",
+    "small")
+
+ANALYZER_OPTION(
     unsigned, RegionStoreSmallStructLimit, "region-store-small-struct-limit",
     "The largest number of fields a struct can have and still be considered "
     "small This is currently used to decide whether or not it is worth forcing "

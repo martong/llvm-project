@@ -51,6 +51,7 @@
 // CHECK-NEXT: ctu-invocation-list = invocations.yaml
 // CHECK-NEXT: ctu-max-nodes-min = 1000
 // CHECK-NEXT: ctu-max-nodes-mul = 100
+// CHECK-NEXT: ctu-phase1-inlining = small
 // CHECK-NEXT: deadcode.DeadStores:ShowFixIts = false
 // CHECK-NEXT: deadcode.DeadStores:WarnForDeadNestedAssignments = true
 // CHECK-NEXT: debug.AnalysisOrder:* = false

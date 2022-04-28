@@ -435,6 +435,14 @@ bool ExprEngine::ctuBifurcate(const CallEvent &Call, const Decl *D,
   ProgramStateRef ConservativeEvalState = nullptr;
   WorkList *CTUWList = Engine.getCTUWorkList();
   if (Call.isForeign() && CTUWList) {
+    const auto IK = AMgr.options.getCTUPhase1Inlining();
+    const bool DoInline = IK == CTUPhase1InliningKind::All ||
+                          (IK == CTUPhase1InliningKind::Small &&
+                           isSmall(AMgr.getAnalysisDeclContext(D)));
+    if (DoInline) {
+      inlineCall(Engine.getWorkList(), Call, D, Bldr, Pred, State);
+      return true;
+    }
     const bool BState = State->contains<CTUDispatchBifurcationSet>(D);
     if (!BState) { // This is the first time we see this foreign function.
       // Enqueue it to be analyzed in the second (ctu) phase.

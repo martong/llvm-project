@@ -13,11 +13,15 @@
 //
 // RUN: cd "%t" && %clang_cc1 -fsyntax-only -std=c89 -analyze \
 // RUN:   -analyzer-checker=core,debug.ExprInspection \
-// RUN:   -analyzer-config eagerly-assume=false \
 // RUN:   -analyzer-config experimental-enable-naive-ctu-analysis=true \
 // RUN:   -analyzer-config ctu-dir=. \
 // RUN:   -analyzer-config ctu-invocation-list=invocations.yaml \
+// RUN:   -analyzer-config ctu-phase1-inlining=all \
 // RUN:   -verify ctu-on-demand-parsing.c
+//
+// FIXME On-demand ctu should be tested in the very same file that we have for
+// the PCH version, but with a different a different verify prefix (e.g.
+// -verfiy=on-demanc-ctu)
 //
 // FIXME: Path handling should work on all platforms.
 // REQUIRES: system-linux
@@ -33,7 +37,6 @@ extern FooBar fb;
 int f(int);
 void testGlobalVariable() {
   clang_analyzer_eval(f(5) == 1); // expected-warning{{TRUE}}
-                                  // expected-warning@-1{{UNKNOWN}} stu
 }
 
 // Test enums.
@@ -44,7 +47,6 @@ enum A { x,
 void testEnum() {
   clang_analyzer_eval(x == 0);            // expected-warning{{TRUE}}
   clang_analyzer_eval(enumCheck() == 42); // expected-warning{{TRUE}}
-                                          // expected-warning@-1{{UNKNOWN}} stu
 }
 
 // Test that asm import does not fail.
@@ -64,7 +66,6 @@ void testMacro(void) {
 void testImplicit() {
   int res = identImplicit(6);    // external implicit functions are not inlined
   clang_analyzer_eval(res == 6); // expected-warning{{TRUE}}
-                                 // expected-warning@-1{{UNKNOWN}} stu
   // Call something with uninitialized from the same function in which the
   // implicit was called. This is necessary to reproduce a special bug in
   // NoStoreFuncVisitor.
@@ -83,6 +84,5 @@ void testStructDefInArgument() {
   struct DataType d;
   d.a = 1;
   d.b = 0;
-  // Not imported, thus remains unknown both in stu and ctu.
-  clang_analyzer_eval(structInProto(&d) == 0); // expected-warning{{UNKNOWN}}
+  clang_analyzer_eval(structInProto(&d) == 0); // expected-warning{{TRUE}} expected-warning{{FALSE}}
 }
