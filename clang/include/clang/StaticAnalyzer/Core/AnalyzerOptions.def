@@ -428,7 +428,16 @@ ANALYZER_OPTION(
 ANALYZER_OPTION(
     StringRef, CTUPhase1InliningMode, "ctu-phase1-inlining",
     "Controls which functions will be inlined during the first phase of the ctu "
-    "analysis."
+    "analysis. "
+    "If the value is set to 'all' then all foreign functions are inlinied "
+    "immediately during the first phase, thus rendering the second phase a noop. "
+    "The 'ctu-max-nodes-*' budge has no effect in this case. "
+    "If the value is 'small' then only functions with a linear CFG and with a "
+    "limited number of statements would be inlined during the first phase. The "
+    "long and/or nontrivial functions are handled in the second phase and are "
+    "controlled by the 'ctu-max-nodes-*' budge. "
+    "The value 'none' means that all foreign functions are inlined only in the "
+    "second phase, 'ctu-max-nodes-*' budge limits the second phase. "
     "Value: \"none\", \"small\", \"all\".",
     "small")
 
