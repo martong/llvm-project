@@ -163,9 +163,6 @@ bool CoreEngine::ExecuteWorkList(const LocationContext *L, unsigned MaxSteps,
   const unsigned STUSteps = ProcessWList(MaxSteps);
   NumSTUSteps += STUSteps;
 
-  // Let CTU run as many steps we had in the single TU run.
-  // However, we need at least some minimal value to pass those lit tests that
-  // report a bug only in the CTU mode.
   const unsigned MinCTUSteps =
       this->ExprEng.getAnalysisManager().options.CTUMaxNodesMin;
   const unsigned Mul =
