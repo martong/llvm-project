@@ -30,9 +30,8 @@
 // CHECK: CTU loaded AST file: {{.*}}ctu-other.cpp
 // CHECK: CTU loaded AST file: {{.*}}ctu-chain.cpp
 
-// FIXME On-demand ctu should be tested in the very same file that we have for
-// the PCH version, but with a different a different verify prefix (e.g.
-// -verfiy=on-demanc-ctu)
+// FIXME On-demand ctu should be tested in the same file that we have for the
+// PCH version, but with a different verify prefix (e.g. -verfiy=on-demand-ctu)
 //
 // FIXME: Path handling should work on all platforms.
 // REQUIRES: system-linux
