@@ -44,10 +44,10 @@ ConditionTruthVal ConstraintManager::checkNull(ProgramStateRef State,
 
 ConstraintManager::ProgramStatePair
 ConstraintManager::assumeDual(ProgramStateRef State, DefinedSVal Cond) {
-  ProgramStateRef StTrue = assume(State, Cond, true);
+  ProgramStateRef StTrue = assumeInternal(State, Cond, true);
 
   if (!StTrue) {
-    ProgramStateRef StFalse = assume(State, Cond, false);
+    ProgramStateRef StFalse = assumeInternal(State, Cond, false);
     if (!StFalse) { // both infeasible
       ProgramStateRef Infeasible = State->cloneAsInfeasible();
       assert(Infeasible->isInfeasible());
@@ -56,10 +56,16 @@ ConstraintManager::assumeDual(ProgramStateRef State, DefinedSVal Cond) {
     return ProgramStatePair(nullptr, StFalse);
   }
 
-  ProgramStateRef StFalse = assume(State, Cond, false);
+  ProgramStateRef StFalse = assumeInternal(State, Cond, false);
   if (!StFalse) {
     return ProgramStatePair(StTrue, nullptr);
   }
 
   return ProgramStatePair(StTrue, StFalse);
+}
+
+ProgramStateRef ConstraintManager::assume(ProgramStateRef State,
+                                          DefinedSVal Cond, bool Assumption) {
+  ConstraintManager::ProgramStatePair R = assumeDual(State, Cond);
+  return Assumption ? R.first : R.second;
 }
