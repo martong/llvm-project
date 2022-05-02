@@ -356,7 +356,8 @@ ProgramStateRef ProgramState::assumeInBound(DefinedOrUnknownSVal Idx,
 
   // Finally, let the constraint manager take care of it.
   ConstraintManager &CM = SM.getConstraintManager();
-  return CM.assume(this, inBound.castAs<DefinedSVal>(), Assumption);
+  auto R = CM.assumeDual(this, inBound.castAs<DefinedSVal>());
+  return Assumption ? R.first : R.second;
 }
 
 ConditionTruthVal ProgramState::isNonNull(SVal V) const {
