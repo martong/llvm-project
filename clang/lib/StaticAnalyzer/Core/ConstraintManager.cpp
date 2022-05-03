@@ -16,9 +16,15 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/ProgramState.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/ProgramState_Fwd.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/SVals.h"
+#include "llvm/ADT/Statistic.h"
 
 using namespace clang;
 using namespace ento;
+
+#define DEBUG_TYPE "CoreEngine"
+
+STATISTIC(NumInfeasible, "The # of infeasible states");
+STATISTIC(NumFeasible, "The # of feasible states");
 
 ConstraintManager::~ConstraintManager() = default;
 
@@ -51,8 +57,10 @@ ConstraintManager::assumeDual(ProgramStateRef State, DefinedSVal Cond) {
     if (!StFalse) { // both infeasible
       ProgramStateRef Infeasible = State->cloneAsInfeasible();
       assert(Infeasible->isInfeasible());
+      ++NumInfeasible;
       return ProgramStatePair(Infeasible, Infeasible);
     }
+    ++NumFeasible;
     return ProgramStatePair(nullptr, StFalse);
   }
 
