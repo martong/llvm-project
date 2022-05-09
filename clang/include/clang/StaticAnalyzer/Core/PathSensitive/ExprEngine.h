@@ -805,10 +805,10 @@ private:
                         const ExplodedNode *Pred,
                         const EvalCallOptions &CallOpts = {});
 
-  bool inlineCall(WorkList *WList, const CallEvent &Call, const Decl *D,
+  void inlineCall(WorkList *WList, const CallEvent &Call, const Decl *D,
                   NodeBuilder &Bldr, ExplodedNode *Pred, ProgramStateRef State);
 
-  bool ctuBifurcate(const CallEvent &Call, const Decl *D, NodeBuilder &Bldr,
+  void ctuBifurcate(const CallEvent &Call, const Decl *D, NodeBuilder &Bldr,
                     ExplodedNode *Pred, ProgramStateRef State);
 
   /// Conservatively evaluate call by invalidating regions and binding

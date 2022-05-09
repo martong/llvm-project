@@ -429,7 +429,7 @@ REGISTER_MAP_WITH_PROGRAMSTATE(DynamicDispatchBifurcationMap,
                                const MemRegion *, unsigned)
 REGISTER_SET_WITH_PROGRAMSTATE(CTUDispatchBifurcationSet, const Decl *)
 
-bool ExprEngine::ctuBifurcate(const CallEvent &Call, const Decl *D,
+void ExprEngine::ctuBifurcate(const CallEvent &Call, const Decl *D,
                               NodeBuilder &Bldr, ExplodedNode *Pred,
                               ProgramStateRef State) {
   ProgramStateRef ConservativeEvalState = nullptr;
@@ -441,7 +441,7 @@ bool ExprEngine::ctuBifurcate(const CallEvent &Call, const Decl *D,
                            isSmall(AMgr.getAnalysisDeclContext(D)));
     if (DoInline) {
       inlineCall(Engine.getWorkList(), Call, D, Bldr, Pred, State);
-      return true;
+      return;
     }
     const bool BState = State->contains<CTUDispatchBifurcationSet>(D);
     if (!BState) { // This is the first time we see this foreign function.
@@ -453,13 +453,12 @@ bool ExprEngine::ctuBifurcate(const CallEvent &Call, const Decl *D,
     } else {
       conservativeEvalCall(Call, Bldr, Pred, State);
     }
-    return true;
+    return;
   }
   inlineCall(Engine.getWorkList(), Call, D, Bldr, Pred, State);
-  return true;
 }
 
-bool ExprEngine::inlineCall(WorkList *WList, const CallEvent &Call,
+void ExprEngine::inlineCall(WorkList *WList, const CallEvent &Call,
                             const Decl *D, NodeBuilder &Bldr,
                             ExplodedNode *Pred, ProgramStateRef State) {
   assert(D);
@@ -517,8 +516,6 @@ bool ExprEngine::inlineCall(WorkList *WList, const CallEvent &Call,
     // Mark the decl as visited.
     if (VisitedCallees)
       VisitedCallees->insert(D);
-
-  return true;
 }
 
 static ProgramStateRef getInlineFailedState(ProgramStateRef State,
@@ -1125,10 +1122,8 @@ void ExprEngine::defaultEvalCall(NodeBuilder &Bldr, ExplodedNode *Pred,
           return;
         }
       }
-
-      // We are not bifurcating and we do have a Decl, so just inline.
-      if (ctuBifurcate(*Call, D, Bldr, Pred, State))
-        return;
+      ctuBifurcate(*Call, D, Bldr, Pred, State);
+      return;
     }
   }
 
@@ -1150,8 +1145,7 @@ void ExprEngine::BifurcateCall(const MemRegion *BifurReg,
   if (BState) {
     // If we are on "inline path", keep inlining if possible.
     if (*BState == DynamicDispatchModeInlined)
-      if (ctuBifurcate(Call, D, Bldr, Pred, State))
-        return;
+      ctuBifurcate(Call, D, Bldr, Pred, State);
     // If inline failed, or we are on the path where we assume we
     // don't have enough info about the receiver to inline, conjure the
     // return value and invalidate the regions.
