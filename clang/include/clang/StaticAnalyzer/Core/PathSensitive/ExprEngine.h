@@ -811,6 +811,10 @@ private:
   void ctuBifurcate(const CallEvent &Call, const Decl *D, NodeBuilder &Bldr,
                     ExplodedNode *Pred, ProgramStateRef State);
 
+  /// Returns true if the CTU analysis is running its first phase.
+  /// Returns true in single TU (non-CTU) mode!
+  bool isCTUInFirtstPhase() { return Engine.getCTUWorkList(); }
+
   /// Conservatively evaluate call by invalidating regions and binding
   /// a conjured return value.
   void conservativeEvalCall(const CallEvent &Call, NodeBuilder &Bldr,

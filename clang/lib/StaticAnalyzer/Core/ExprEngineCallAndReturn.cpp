@@ -433,8 +433,7 @@ void ExprEngine::ctuBifurcate(const CallEvent &Call, const Decl *D,
                               NodeBuilder &Bldr, ExplodedNode *Pred,
                               ProgramStateRef State) {
   ProgramStateRef ConservativeEvalState = nullptr;
-  WorkList *CTUWList = Engine.getCTUWorkList();
-  if (Call.isForeign() && CTUWList) {
+  if (Call.isForeign() && isCTUInFirtstPhase()) {
     const auto IK = AMgr.options.getCTUPhase1Inlining();
     const bool DoInline = IK == CTUPhase1InliningKind::All ||
                           (IK == CTUPhase1InliningKind::Small &&
@@ -446,7 +445,7 @@ void ExprEngine::ctuBifurcate(const CallEvent &Call, const Decl *D,
     const bool BState = State->contains<CTUDispatchBifurcationSet>(D);
     if (!BState) { // This is the first time we see this foreign function.
       // Enqueue it to be analyzed in the second (ctu) phase.
-      inlineCall(CTUWList, Call, D, Bldr, Pred, State);
+      inlineCall(Engine.getCTUWorkList(), Call, D, Bldr, Pred, State);
       // Conservatively evaluate in the first phase.
       ConservativeEvalState = State->add<CTUDispatchBifurcationSet>(D);
       conservativeEvalCall(Call, Bldr, Pred, ConservativeEvalState);
@@ -512,7 +511,7 @@ void ExprEngine::inlineCall(WorkList *WList, const CallEvent &Call,
   // Note, during the 1st run, it doesn't matter if we mark the foreign
   // functions as visited (or not) because they can never appear as a top level
   // function in the main TU.
-  if (Engine.getCTUWorkList())
+  if (isCTUInFirtstPhase())
     // Mark the decl as visited.
     if (VisitedCallees)
       VisitedCallees->insert(D);
