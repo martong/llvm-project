@@ -113,7 +113,9 @@ class RuntimeDefinition {
   /// precise.
   const MemRegion *R = nullptr;
 
-  const bool Foreign = false; // From CTU.
+  /// A definition is foreign if it has been imported and newly created by the
+  /// ASTImporter. This can be true only if CTU is enabled.
+  const bool Foreign = false;
 
 public:
   RuntimeDefinition() = default;
