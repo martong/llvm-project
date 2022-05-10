@@ -349,6 +349,9 @@ public:
   NonLoc makeNonLoc(const SymExpr *lhs, BinaryOperator::Opcode op,
                     const SymExpr *rhs, QualType type);
 
+  NonLoc makeNonLoc(const SymExpr *operand, UnaryOperator::Opcode op,
+                    QualType type);
+
   /// Create a NonLoc value for cast.
   NonLoc makeNonLoc(const SymExpr *operand, QualType fromTy, QualType toTy);
 

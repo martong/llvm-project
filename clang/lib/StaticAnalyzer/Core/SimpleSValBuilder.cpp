@@ -90,6 +90,9 @@ SVal SimpleSValBuilder::evalMinus(NonLoc val) {
   switch (val.getSubKind()) {
   case nonloc::ConcreteIntKind:
     return val.castAs<nonloc::ConcreteInt>().evalMinus(*this);
+  case nonloc::SymbolValKind:
+    return makeNonLoc(val.castAs<nonloc::SymbolVal>().getSymbol(), UO_Minus,
+                      val.getType(Context));
   default:
     return UnknownVal();
   }

@@ -99,6 +99,13 @@ NonLoc SValBuilder::makeNonLoc(const SymExpr *lhs, BinaryOperator::Opcode op,
   return nonloc::SymbolVal(SymMgr.getSymSymExpr(lhs, op, rhs, type));
 }
 
+NonLoc SValBuilder::makeNonLoc(const SymExpr *operand, UnaryOperator::Opcode op,
+                               QualType type) {
+  assert(operand);
+  assert(!Loc::isLocType(type));
+  return nonloc::SymbolVal(SymMgr.getUnarySymExpr(operand, op, type));
+}
+
 NonLoc SValBuilder::makeNonLoc(const SymExpr *operand,
                                QualType fromTy, QualType toTy) {
   assert(operand);
