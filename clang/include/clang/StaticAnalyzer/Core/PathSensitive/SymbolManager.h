@@ -318,11 +318,14 @@ class UnarySymExpr : public SymExpr {
 public:
   UnarySymExpr(const SymExpr *In, UnaryOperator::Opcode Op, QualType T)
       : SymExpr(UnarySymExprKind), Operand(In), Op(Op), T(T) {
-    assert(classof(this));
+    // Note, some unary operators are modeled as a binary operator. E.g. ++x is
+    // modeled as x + 1.
+    assert((Op == UO_Minus || Op == UO_Not) && "non-supported unary expression");
     // Unary expressions are results of arithmetic. Pointer arithmetic is not
     // handled by unary expressions, but it is instead handled by applying
     // sub-regions to regions.
-    assert(isValidTypeForSymbol(T) && !Loc::isLocType(T));
+    assert(isValidTypeForSymbol(T) && "non-valid type for unary symbol");
+    assert(!Loc::isLocType(T) && "unary symbol should be nonloc");
   }
 
   unsigned computeComplexity() const override {
