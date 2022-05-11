@@ -438,6 +438,19 @@ SVal SValBuilder::makeSymExprValNN(BinaryOperator::Opcode Op,
   return UnknownVal();
 }
 
+SVal SValBuilder::evalUnaryOp(ProgramStateRef state, UnaryOperator::Opcode opc,
+                 SVal operand, QualType type) {
+  auto OpN = operand.getAs<NonLoc>();
+  if (!OpN)
+    return UnknownVal();
+
+  if (opc == UO_Minus)
+    return evalMinus(*OpN);
+  if (opc == UO_Not)
+    return evalComplement(*OpN);
+  llvm_unreachable("Unexpected unary operator");
+}
+
 SVal SValBuilder::evalBinOp(ProgramStateRef state, BinaryOperator::Opcode op,
                             SVal lhs, SVal rhs, QualType type) {
   if (lhs.isUndef() || rhs.isUndef())

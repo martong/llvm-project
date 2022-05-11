@@ -16,3 +16,9 @@ int test(int flag) {
   (void)(flag);
   return 42;
 }
+
+void test_svalbuilder_simplification(int x, int y) {
+  if (x + y != 3)
+    return;
+  clang_analyzer_eval(-(x + y) == -3); // expected-warning{{TRUE}}
+}
