@@ -102,6 +102,9 @@ SVal SimpleSValBuilder::evalComplement(NonLoc X) {
   switch (X.getSubKind()) {
   case nonloc::ConcreteIntKind:
     return X.castAs<nonloc::ConcreteInt>().evalComplement(*this);
+  case nonloc::SymbolValKind:
+    return makeNonLoc(X.castAs<nonloc::SymbolVal>().getSymbol(), UO_Not,
+                      X.getType(Context));
   default:
     return UnknownVal();
   }

@@ -6,14 +6,20 @@
 void clang_analyzer_eval(int);
 void clang_analyzer_dump(int);
 
-int test(int flag) {
-  clang_analyzer_dump(-flag);    // expected-warning{{-reg_$0<int flag>}}
-  if (-flag == 0) {
-    clang_analyzer_eval(-flag == 0); // expected-warning{{TRUE}}
-    clang_analyzer_eval(-flag > 0);  // expected-warning{{FALSE}}
-    clang_analyzer_eval(-flag < 0);  // expected-warning{{FALSE}}
+int test(int x, int y) {
+  clang_analyzer_dump(-x);    // expected-warning{{-reg_$0<int x>}}
+  clang_analyzer_dump(~x);    // expected-warning{{~reg_$0<int x>}}
+  if (-x == 0) {
+    clang_analyzer_eval(-x == 0); // expected-warning{{TRUE}}
+    clang_analyzer_eval(-x > 0);  // expected-warning{{FALSE}}
+    clang_analyzer_eval(-x < 0);  // expected-warning{{FALSE}}
   }
-  (void)(flag);
+  if (~y == 0) {
+    clang_analyzer_eval(~y == 0); // expected-warning{{TRUE}}
+    clang_analyzer_eval(~y > 0);  // expected-warning{{FALSE}}
+    clang_analyzer_eval(~y < 0);  // expected-warning{{FALSE}}
+  }
+  (void)(x);
   return 42;
 }
 
