@@ -445,9 +445,9 @@ SVal SValBuilder::evalUnaryOp(ProgramStateRef state, UnaryOperator::Opcode opc,
     return UnknownVal();
 
   if (opc == UO_Minus)
-    return evalMinus(*OpN);
+    return evalMinus(*OpN, type);
   if (opc == UO_Not)
-    return evalComplement(*OpN);
+    return evalComplement(*OpN, type);
   llvm_unreachable("Unexpected unary operator");
 }
 

@@ -56,8 +56,8 @@ public:
       : SValBuilder(alloc, context, stateMgr) {}
   ~SimpleSValBuilder() override {}
 
-  SVal evalMinus(NonLoc val) override;
-  SVal evalComplement(NonLoc val) override;
+  SVal evalMinus(NonLoc val, QualType resultTy) override;
+  SVal evalComplement(NonLoc val, QualType resultTy) override;
   SVal evalBinOpNN(ProgramStateRef state, BinaryOperator::Opcode op,
                    NonLoc lhs, NonLoc rhs, QualType resultTy) override;
   SVal evalBinOpLL(ProgramStateRef state, BinaryOperator::Opcode op,
@@ -86,25 +86,57 @@ SValBuilder *ento::createSimpleSValBuilder(llvm::BumpPtrAllocator &alloc,
 // Transfer function for unary operators.
 //===----------------------------------------------------------------------===//
 
-SVal SimpleSValBuilder::evalMinus(NonLoc val) {
+SVal SimpleSValBuilder::evalMinus(NonLoc val, QualType resultTy) {
+  auto V = val.getType(Context);
+  if(V->isSignedIntegerType() != resultTy->isSignedIntegerType()) {
+    val.getType(Context).dump();
+    resultTy.dump();
+    assert(false && "XXXMinus Signed");
+  }
+  if(V->isUnsignedIntegerType() != resultTy->isUnsignedIntegerType()) {
+    val.getType(Context).dump();
+    resultTy.dump();
+    assert(false && "XXXMinus UnSigned");
+  }
+  if(Context.getTypeSize(V) != Context.getTypeSize(resultTy)) {
+    val.getType(Context).dump();
+    resultTy.dump();
+    assert(false && "XXXMinus Size");
+  }
   switch (val.getSubKind()) {
   case nonloc::ConcreteIntKind:
     return val.castAs<nonloc::ConcreteInt>().evalMinus(*this);
   case nonloc::SymbolValKind:
     return makeNonLoc(val.castAs<nonloc::SymbolVal>().getSymbol(), UO_Minus,
-                      val.getType(Context));
+                      resultTy);
   default:
     return UnknownVal();
   }
 }
 
-SVal SimpleSValBuilder::evalComplement(NonLoc X) {
+SVal SimpleSValBuilder::evalComplement(NonLoc X, QualType resultTy) {
+  auto V = X.getType(Context);
+  if(V->isSignedIntegerType() != resultTy->isSignedIntegerType()) {
+    X.getType(Context).dump();
+    resultTy.dump();
+    assert(false && "XXXComplement Signed");
+  }
+  if(V->isUnsignedIntegerType() != resultTy->isUnsignedIntegerType()) {
+    X.getType(Context).dump();
+    resultTy.dump();
+    assert(false && "XXXComplement UnSigned");
+  }
+  if(Context.getTypeSize(V) != Context.getTypeSize(resultTy)) {
+    X.getType(Context).dump();
+    resultTy.dump();
+    assert(false && "XXXComplement Size");
+  }
   switch (X.getSubKind()) {
   case nonloc::ConcreteIntKind:
     return X.castAs<nonloc::ConcreteInt>().evalComplement(*this);
   case nonloc::SymbolValKind:
     return makeNonLoc(X.castAs<nonloc::SymbolVal>().getSymbol(), UO_Not,
-                      X.getType(Context));
+                      resultTy);
   default:
     return UnknownVal();
   }
@@ -1126,7 +1158,7 @@ SVal SimpleSValBuilder::evalBinOpLN(ProgramStateRef state,
     }
     else if (isa<SubRegion>(region)) {
       assert(op == BO_Add || op == BO_Sub);
-      index = (op == BO_Add) ? rhs : evalMinus(rhs);
+      index = (op == BO_Add) ? rhs : evalMinus(rhs, rhs.getType(Context));
       superR = cast<SubRegion>(region);
       // TODO: Is this actually reliable? Maybe improving our MemRegion
       // hierarchy to provide typed regions for all non-void pointers would be
