@@ -1450,25 +1450,21 @@ private:
       return llvm::None;
 
     const RangeSet *NegatedRange = nullptr;
-    if (const UnarySymExpr *USE = dyn_cast<UnarySymExpr>(Sym)) {
+    SymbolManager &SymMgr = State->getSymbolManager();
+    if (const auto *USE = dyn_cast<UnarySymExpr>(Sym)) {
       if (USE->getOpcode() == UO_Minus) {
         // Just get the operand when we negate a symbol that is already negated.
-        // -(-a) == a, ~(~a) == a
-        SymbolRef NegatedSym = USE->getOperand();
-        NegatedRange = getConstraint(State, NegatedSym);
+        // -(-a) == a
+        NegatedRange = getConstraint(State, USE->getOperand());
       }
-
     } else if (const SymSymExpr *SSE = dyn_cast<SymSymExpr>(Sym)) {
       if (SSE->getOpcode() == BO_Sub) {
         QualType T = Sym->getType();
-        SymbolManager &SymMgr = State->getSymbolManager();
         SymbolRef NegatedSym =
             SymMgr.getSymSymExpr(SSE->getRHS(), BO_Sub, SSE->getLHS(), T);
         NegatedRange = getConstraint(State, NegatedSym);
       }
-
     } else {
-      SymbolManager &SymMgr = State->getSymbolManager();
       SymbolRef NegatedSym =
           SymMgr.getUnarySymExpr(Sym, UO_Minus, Sym->getType());
       NegatedRange = getConstraint(State, NegatedSym);
