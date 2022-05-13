@@ -585,12 +585,12 @@ public:
   static std::pair<const ProgramPointTag *, const ProgramPointTag *>
     geteagerlyAssumeBinOpBifurcationTags();
 
-  SVal evalMinus(SVal X) {
-    return X.isValid() ? svalBuilder.evalMinus(X.castAs<NonLoc>()) : X;
+  SVal evalMinus(SVal X, QualType T) {
+    return X.isValid() ? svalBuilder.evalMinus(X.castAs<NonLoc>(), T) : X;
   }
 
-  SVal evalComplement(SVal X) {
-    return X.isValid() ? svalBuilder.evalComplement(X.castAs<NonLoc>()) : X;
+  SVal evalComplement(SVal X, QualType T) {
+    return X.isValid() ? svalBuilder.evalComplement(X.castAs<NonLoc>(), T) : X;
   }
 
   ProgramStateRef handleLValueBitCast(ProgramStateRef state, const Expr *Ex,
