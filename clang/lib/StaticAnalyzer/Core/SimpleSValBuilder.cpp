@@ -56,8 +56,8 @@ public:
       : SValBuilder(alloc, context, stateMgr) {}
   ~SimpleSValBuilder() override {}
 
-  SVal evalMinus(NonLoc val, QualType resultTy) override;
-  SVal evalComplement(NonLoc val, QualType resultTy) override;
+  SVal evalMinus(NonLoc val) override;
+  SVal evalComplement(NonLoc val) override;
   SVal evalBinOpNN(ProgramStateRef state, BinaryOperator::Opcode op,
                    NonLoc lhs, NonLoc rhs, QualType resultTy) override;
   SVal evalBinOpLL(ProgramStateRef state, BinaryOperator::Opcode op,
@@ -86,25 +86,25 @@ SValBuilder *ento::createSimpleSValBuilder(llvm::BumpPtrAllocator &alloc,
 // Transfer function for unary operators.
 //===----------------------------------------------------------------------===//
 
-SVal SimpleSValBuilder::evalMinus(NonLoc val, QualType resultTy) {
+SVal SimpleSValBuilder::evalMinus(NonLoc val) {
   switch (val.getSubKind()) {
   case nonloc::ConcreteIntKind:
     return val.castAs<nonloc::ConcreteInt>().evalMinus(*this);
   case nonloc::SymbolValKind:
     return makeNonLoc(val.castAs<nonloc::SymbolVal>().getSymbol(), UO_Minus,
-                      resultTy);
+                      val.getType(Context));
   default:
     return UnknownVal();
   }
 }
 
-SVal SimpleSValBuilder::evalComplement(NonLoc X, QualType resultTy) {
+SVal SimpleSValBuilder::evalComplement(NonLoc X) {
   switch (X.getSubKind()) {
   case nonloc::ConcreteIntKind:
     return X.castAs<nonloc::ConcreteInt>().evalComplement(*this);
   case nonloc::SymbolValKind:
     return makeNonLoc(X.castAs<nonloc::SymbolVal>().getSymbol(), UO_Not,
-                      resultTy);
+                      X.getType(Context));
   default:
     return UnknownVal();
   }
@@ -1126,7 +1126,7 @@ SVal SimpleSValBuilder::evalBinOpLN(ProgramStateRef state,
     }
     else if (isa<SubRegion>(region)) {
       assert(op == BO_Add || op == BO_Sub);
-      index = (op == BO_Add) ? rhs : evalMinus(rhs, rhs.getType(Context));
+      index = (op == BO_Add) ? rhs : evalMinus(rhs);
       superR = cast<SubRegion>(region);
       // TODO: Is this actually reliable? Maybe improving our MemRegion
       // hierarchy to provide typed regions for all non-void pointers would be

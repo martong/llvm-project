@@ -651,8 +651,7 @@ void IteratorModeling::handlePtrIncrOrDecr(CheckerContext &C,
     NewVal = State->getLValue(ElementType, Offset, OldVal);
   } else {
     auto &SVB = C.getSValBuilder();
-    SVal NegatedOffset = SVB.evalMinus(Offset.castAs<NonLoc>(),
-                                       Offset.getType(C.getASTContext()));
+    SVal NegatedOffset = SVB.evalMinus(Offset.castAs<NonLoc>());
     NewVal = State->getLValue(ElementType, NegatedOffset, OldVal);
   }
 
