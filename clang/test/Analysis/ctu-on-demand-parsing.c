@@ -19,7 +19,7 @@
 // RUN:   -analyzer-config ctu-phase1-inlining=all \
 // RUN:   -verify ctu-on-demand-parsing.c
 //
-// FIXME On-demand ctu should be tested in the same file that we have for the
+// FIXME: On-demand ctu should be tested in the same file that we have for the
 // PCH version, but with a different verify prefix (e.g. -verfiy=on-demand-ctu)
 //
 // FIXME: Path handling should work on all platforms.

@@ -21,11 +21,11 @@
 // RUN:   -analyzer-config display-ctu-progress=true \
 // RUN:   -analyzer-display-progress \
 // RUN:   -verify=ctu %s 2>&1 | FileCheck %s
-//
+
 // CallGraph: c->b
 // topological sort: c, b
 // Note that `other` calls into `b` but that is not visible in the CallGraph
-// b/c that happens in another TU.
+// because that happens in another TU.
 
 // During the onego CTU analysis, we start with c() as top level function.
 // Then we visit b() as non-toplevel during the processing of the FWList, thus
