@@ -18,7 +18,7 @@ int bar();
 // RUN:   -analyzer-config ctu-dir=%t/ctudir \
 // RUN:   -analyzer-config display-ctu-progress=true \
 // RUN:   -analyzer-display-progress \
-// RUN:   -analyzer-config ctu-max-nodes-mul=0 \
+// RUN:   -analyzer-config ctu-max-nodes-pct=0 \
 // RUN:   -analyzer-config ctu-max-nodes-min=0 2>&1 %s | FileCheck %s
 // CHECK: ANALYZE (Path,  Inline_Regular): {{.*}} baruser(int){{.*}}CTU loaded AST file
 
@@ -27,7 +27,7 @@ int bar();
 // RUN:   -analyzer-config eagerly-assume=false \
 // RUN:   -analyzer-config experimental-enable-naive-ctu-analysis=true \
 // RUN:   -analyzer-config ctu-dir=%t/ctudir \
-// RUN:   -analyzer-config ctu-max-nodes-mul=0 \
+// RUN:   -analyzer-config ctu-max-nodes-pct=0 \
 // RUN:   -analyzer-config ctu-phase1-inlining=none \
 // RUN:   -analyzer-config ctu-max-nodes-min=0 -verify=inline-none %s
 
@@ -36,7 +36,7 @@ int bar();
 // RUN:   -analyzer-config eagerly-assume=false \
 // RUN:   -analyzer-config experimental-enable-naive-ctu-analysis=true \
 // RUN:   -analyzer-config ctu-dir=%t/ctudir \
-// RUN:   -analyzer-config ctu-max-nodes-mul=0 \
+// RUN:   -analyzer-config ctu-max-nodes-pct=0 \
 // RUN:   -analyzer-config ctu-phase1-inlining=small \
 // RUN:   -analyzer-config ctu-max-nodes-min=0 -verify=inline-small %s
 

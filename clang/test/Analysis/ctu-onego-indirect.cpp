@@ -19,7 +19,7 @@ int bar();
 // RUN:   -analyzer-display-progress \
 // RUN:   -analyzer-inlining-mode=all \
 // RUN:   -analyzer-config ctu-phase1-inlining=none \
-// RUN:   -analyzer-config ctu-max-nodes-mul=100 \
+// RUN:   -analyzer-config ctu-max-nodes-pct=100 \
 // RUN:   -analyzer-config ctu-max-nodes-min=1000 2>&1 %s | FileCheck %s
 // CHECK: ANALYZE (Path,  Inline_Regular):{{.*}}adirectbaruser(int)
 // CHECK: ANALYZE (Path,  Inline_Regular):{{.*}}baruser(int)
@@ -33,7 +33,7 @@ int bar();
 // RUN:   -analyzer-inlining-mode=all \
 // RUN:   -analyzer-config ctu-phase1-inlining=none \
 // RUN:   -verify %s \
-// RUN:   -analyzer-config ctu-max-nodes-mul=100 \
+// RUN:   -analyzer-config ctu-max-nodes-pct=100 \
 // RUN:   -analyzer-config ctu-max-nodes-min=1000
 
 

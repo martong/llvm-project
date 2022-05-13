@@ -29,7 +29,7 @@ int bar() {
 // RUN:   -analyzer-config ctu-dir=%t/ctudir \
 // RUN:   -verify=stu %s \
 // RUN:   -analyze-function='baruser(int)' -x c++ \
-// RUN:   -analyzer-config ctu-max-nodes-mul=0 \
+// RUN:   -analyzer-config ctu-max-nodes-pct=0 \
 // RUN:   -analyzer-config ctu-max-nodes-min=0
 
 //Here we enable the CTU work list execution. We should not bifurcate on the
@@ -41,7 +41,7 @@ int bar() {
 // RUN:   -analyzer-config ctu-dir=%t/ctudir \
 // RUN:   -verify=ctu %s \
 // RUN:   -analyze-function='baruser(int)' -x c++ \
-// RUN:   -analyzer-config ctu-max-nodes-mul=100 \
+// RUN:   -analyzer-config ctu-max-nodes-pct=100 \
 // RUN:   -analyzer-config ctu-max-nodes-min=1000
 
 void other(); // Defined in the other TU.
