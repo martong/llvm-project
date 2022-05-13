@@ -813,7 +813,7 @@ private:
 
   /// Returns true if the CTU analysis is running its first phase.
   /// Returns true in single TU (non-CTU) mode!
-  bool isCTUInFirtstPhase() { return Engine.getCTUWorkList(); }
+  bool isSecondPhaseCTU() { return !Engine.getCTUWorkList(); }
 
   /// Conservatively evaluate call by invalidating regions and binding
   /// a conjured return value.

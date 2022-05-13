@@ -433,7 +433,7 @@ void ExprEngine::ctuBifurcate(const CallEvent &Call, const Decl *D,
                               NodeBuilder &Bldr, ExplodedNode *Pred,
                               ProgramStateRef State) {
   ProgramStateRef ConservativeEvalState = nullptr;
-  if (Call.isForeign() && isCTUInFirtstPhase()) {
+  if (Call.isForeign() && !isSecondPhaseCTU()) {
     const auto IK = AMgr.options.getCTUPhase1Inlining();
     const bool DoInline = IK == CTUPhase1InliningKind::All ||
                           (IK == CTUPhase1InliningKind::Small &&
@@ -511,7 +511,7 @@ void ExprEngine::inlineCall(WorkList *WList, const CallEvent &Call,
   // Note, during the 1st run, it doesn't matter if we mark the foreign
   // functions as visited (or not) because they can never appear as a top level
   // function in the main TU.
-  if (isCTUInFirtstPhase())
+  if (!isSecondPhaseCTU())
     // Mark the decl as visited.
     if (VisitedCallees)
       VisitedCallees->insert(D);
