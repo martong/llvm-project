@@ -520,9 +520,11 @@ RuntimeDefinition AnyFunctionCall::getRuntimeDefinition() const {
   cross_tu::CrossTranslationUnitContext &CTUCtx =
       *Engine.getCrossTranslationUnitContext();
 
+  AnalyzerOptions &Opts = Engine.getAnalysisManager().options;
+
   if (Body) {
     const Decl* Decl = AD->getDecl();
-    if (CTUCtx.isImportedAsNew(Decl)) {
+    if (Opts.IsNaiveCTUEnabled && CTUCtx.isImportedAsNew(Decl)) {
       // A newly created definition, but we had error(s) during the import.
       if (CTUCtx.hasError(Decl))
         return {};
@@ -530,8 +532,6 @@ RuntimeDefinition AnyFunctionCall::getRuntimeDefinition() const {
     }
     return RuntimeDefinition(Decl, /*Foreign=*/false);
   }
-
-  AnalyzerOptions &Opts = Engine.getAnalysisManager().options;
 
   // Try to get CTU definition only if CTUDir is provided.
   if (!Opts.IsNaiveCTUEnabled)

@@ -75,8 +75,8 @@ static std::unique_ptr<WorkList> generateWorkList(AnalyzerOptions &Opts) {
 CoreEngine::CoreEngine(ExprEngine &exprengine, FunctionSummariesTy *FS,
                        AnalyzerOptions &Opts)
     : ExprEng(exprengine), WList(generateWorkList(Opts)),
-      CTUWList(generateWorkList(Opts)), BCounterFactory(G.getAllocator()),
-      FunctionSummaries(FS) {}
+      CTUWList(Opts.IsNaiveCTUEnabled ? generateWorkList(Opts) : nullptr),
+      BCounterFactory(G.getAllocator()), FunctionSummaries(FS) {}
 
 void CoreEngine::setBlockCounter(BlockCounter C) {
   WList->setBlockCounter(C);
@@ -161,17 +161,19 @@ bool CoreEngine::ExecuteWorkList(const LocationContext *L, unsigned MaxSteps,
     return MaxSteps - Steps;
   };
   const unsigned STUSteps = ProcessWList(MaxSteps);
-  NumSTUSteps += STUSteps;
 
-  const unsigned MinCTUSteps =
-      this->ExprEng.getAnalysisManager().options.CTUMaxNodesMin;
-  const unsigned Pct =
-      this->ExprEng.getAnalysisManager().options.CTUMaxNodesPercentage;
-  unsigned MaxCTUSteps = std::max(STUSteps * Pct / 100, MinCTUSteps);
+  if (CTUWList) {
+    NumSTUSteps += STUSteps;
+    const unsigned MinCTUSteps =
+        this->ExprEng.getAnalysisManager().options.CTUMaxNodesMin;
+    const unsigned Pct =
+        this->ExprEng.getAnalysisManager().options.CTUMaxNodesPercentage;
+    unsigned MaxCTUSteps = std::max(STUSteps * Pct / 100, MinCTUSteps);
 
-  WList = std::move(CTUWList);
-  const unsigned CTUSteps = ProcessWList(MaxCTUSteps);
-  NumCTUSteps += CTUSteps;
+    WList = std::move(CTUWList);
+    const unsigned CTUSteps = ProcessWList(MaxCTUSteps);
+    NumCTUSteps += CTUSteps;
+  }
 
   ExprEng.processEndWorklist();
   return WList->hasWork();

@@ -153,7 +153,7 @@ private:
   ProgramStateRef State;
   const LocationContext *LCtx;
   llvm::PointerUnion<const Expr *, const Decl *> Origin;
-  mutable Optional<bool> Foreign; // From CTU.
+  mutable Optional<bool> Foreign; // Set by CTU analysis.
 
 protected:
   // This is user data for subclasses.
