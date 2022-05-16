@@ -255,20 +255,6 @@ public:
     llvm_unreachable("Unimplemented opcode");
   }
 
-  static inline llvm::SMTExprRef fromUnary(llvm::SMTSolverRef &Solver,
-                                           ASTContext &Ctx,
-                                           const llvm::SMTExprRef &Exp,
-                                           const UnaryOperator::Opcode Op) {
-    switch (Op) {
-    case UO_Minus:
-      return Solver->mkBVNeg(Exp);
-    case UO_Not:
-      return Solver->mkBVNot(Exp);
-    default:;
-    }
-    llvm_unreachable("Unimplemented opcode");
-  }
-
   /// Construct an SMTSolverRef from a QualType FromTy to a QualType ToTy,
   /// and their bit widths.
   static inline llvm::SMTExprRef fromCast(llvm::SMTSolverRef &Solver,
@@ -463,12 +449,9 @@ public:
     if (const UnarySymExpr *USE = dyn_cast<UnarySymExpr>(Sym)) {
       if (RetTy)
         *RetTy = Sym->getType();
-
-      QualType FromTy;
       llvm::SMTExprRef Exp =
-          getSymExpr(Solver, Ctx, USE->getOperand(), &FromTy, hasComparison);
-
-      return fromUnary(Solver, Ctx, Exp, USE->getOpcode());
+          getSymExpr(Solver, Ctx, USE->getOperand(), nullptr, hasComparison);
+      return fromUnOp(Solver, USE->getOpcode(), Exp);
     }
 
     if (const BinarySymExpr *BSE = dyn_cast<BinarySymExpr>(Sym)) {
