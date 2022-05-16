@@ -427,7 +427,7 @@ namespace {
 
 REGISTER_MAP_WITH_PROGRAMSTATE(DynamicDispatchBifurcationMap,
                                const MemRegion *, unsigned)
-REGISTER_SET_WITH_PROGRAMSTATE(CTUDispatchBifurcationSet, const Decl *)
+REGISTER_TRAIT_WITH_PROGRAMSTATE(CTUDispatchBifurcation, bool)
 
 void ExprEngine::ctuBifurcate(const CallEvent &Call, const Decl *D,
                               NodeBuilder &Bldr, ExplodedNode *Pred,
@@ -442,12 +442,12 @@ void ExprEngine::ctuBifurcate(const CallEvent &Call, const Decl *D,
       inlineCall(Engine.getWorkList(), Call, D, Bldr, Pred, State);
       return;
     }
-    const bool BState = State->contains<CTUDispatchBifurcationSet>(D);
+    const bool BState = State->get<CTUDispatchBifurcation>();
     if (!BState) { // This is the first time we see this foreign function.
       // Enqueue it to be analyzed in the second (ctu) phase.
       inlineCall(Engine.getCTUWorkList(), Call, D, Bldr, Pred, State);
       // Conservatively evaluate in the first phase.
-      ConservativeEvalState = State->add<CTUDispatchBifurcationSet>(D);
+      ConservativeEvalState = State->set<CTUDispatchBifurcation>(true);
       conservativeEvalCall(Call, Bldr, Pred, ConservativeEvalState);
     } else {
       conservativeEvalCall(Call, Bldr, Pred, State);
