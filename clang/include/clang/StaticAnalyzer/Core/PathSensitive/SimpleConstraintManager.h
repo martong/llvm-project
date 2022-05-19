@@ -39,10 +39,11 @@ public:
   ProgramStateRef assumeInternal(ProgramStateRef State, DefinedSVal Cond,
                                  bool Assumption) override;
 
-  ProgramStateRef assumeInclusiveRange(ProgramStateRef State, NonLoc Value,
-                                       const llvm::APSInt &From,
-                                       const llvm::APSInt &To,
-                                       bool InRange) override;
+  ProgramStateRef assumeInclusiveRangeInternal(ProgramStateRef State,
+                                               NonLoc Value,
+                                               const llvm::APSInt &From,
+                                               const llvm::APSInt &To,
+                                               bool InRange) override;
 
 protected:
   //===------------------------------------------------------------------===//
