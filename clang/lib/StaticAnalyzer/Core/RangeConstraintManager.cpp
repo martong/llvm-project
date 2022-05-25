@@ -2534,6 +2534,9 @@ EquivalenceClass::removeMember(ProgramStateRef State, const SymbolRef Old) {
 LLVM_NODISCARD ProgramStateRef reAssume(ProgramStateRef State,
                                         const RangeSet *Constraint,
                                         SVal TheValue) {
+  assert(State);
+  if (State->isPosteriorlyOverconstrained())
+    return nullptr;
   if (!Constraint)
     return State;
 

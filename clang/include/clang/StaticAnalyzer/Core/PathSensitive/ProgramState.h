@@ -123,11 +123,12 @@ private:
   void setStore(const StoreRef &storeRef);
 
   ProgramStateRef cloneAsPosteriorlyOverconstrained() const;
+
+public:
   bool isPosteriorlyOverconstrained() const {
     return PosteriorlyOverconstrained;
   }
 
-public:
   /// This ctor is used when creating the first ProgramState object.
   ProgramState(ProgramStateManager *mgr, const Environment& env,
           StoreRef st, GenericDataMap gdm);
