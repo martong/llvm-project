@@ -460,7 +460,7 @@ public:
       // we do not emit `SymbolCast`s for implicit casts.
       // One such implicit cast is missing if the operand of the unary operator
       // has a different type than the unary itself.
-      if (OperandTy != Sym->getType()) {
+      if (Ctx.getTypeSize(OperandTy) != Ctx.getTypeSize(Sym->getType())) {
         if (hasComparison)
           *hasComparison = false;
         return getCastExpr(Solver, Ctx, UnaryExp, OperandTy, Sym->getType());
