@@ -1278,8 +1278,6 @@ SVal SimpleSValBuilder::simplifySValOnce(ProgramStateRef State, SVal V) {
       return SVB.makeSymbolVal(S);
     }
 
-    // TODO: Support SymbolCast.
-
     SVal VisitSymIntExpr(const SymIntExpr *S) {
       auto I = Cached.find(S);
       if (I != Cached.end())
@@ -1349,7 +1347,17 @@ SVal SimpleSValBuilder::simplifySValOnce(ProgramStateRef State, SVal V) {
           S, SVB.evalBinOp(State, S->getOpcode(), LHS, RHS, S->getType()));
     }
 
-    // FIXME add VisitSymbolCast
+    SVal VisitSymbolCast(const SymbolCast *S) {
+      auto I = Cached.find(S);
+      if (I != Cached.end())
+        return I->second;
+      SVal Op = getConstOrVisit(S->getOperand());
+      if (isUnchanged(S->getOperand(), Op))
+        return skip(S);
+
+      return cache(S,
+                   SVB.evalCast(Op, S->getType(), S->getOperand()->getType()));
+    }
 
     SVal VisitUnarySymExpr(const UnarySymExpr *S) {
       auto I = Cached.find(S);
