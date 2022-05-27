@@ -9,8 +9,7 @@
 // Test that the SValBuilder is able to look up and use a constraint for an
 // operand of a SymbolCast, when the operand is constrained to a const value.
 
-void clang_analyzer_eval(int);
-void clang_analyzer_warnIfReached();
+void clang_analyzer_eval(bool);
 
 extern void abort() __attribute__((__noreturn__));
 #define assert(expr) ((expr) ? (void)(0) : abort())
@@ -24,28 +23,36 @@ void test(int x) {
   clang_analyzer_eval((long)(x * x) == 1); // expected-warning{{TRUE}}
 }
 
-void test1(int x) {
+void test1(int x, int y) {
   // Even if two lower bytes of `x` equal to zero, it doesn't mean that
   // the entire `x` is zero. We are not able to know the exact value of x.
-  // It can be one of  65536 possible values like [0, 65536, 131072, ...]
-  // and so on. To avoid huge range sets we still assume `x` in the range
-  // [INT_MIN, INT_MAX].
-  if (!(short)x) {
-    if (!x)
-      clang_analyzer_warnIfReached(); // expected-warning {{REACHABLE}}
-    else
-      clang_analyzer_warnIfReached(); // expected-warning {{REACHABLE}}
-  }
-}
+  // It can be one of  65536 possible values like
+  // [0, 65536, -65536, 131072, -131072, ...]. To avoid huge range sets we
+  // still assume `x` in the range [INT_MIN, INT_MAX].
+  assert((short)x == 0); // Lower two bytes are set to 0.
 
-void test2(int x) {
-  // If two lower bytes of `x` equal to zero, and we know x to be 65537,
-  // which is not truncated to short as zero. Thus the branch is infisible.
-  short s = x;
-  if (!s) {
-    if (x == 65537 || x == 131073)
-      clang_analyzer_warnIfReached(); // no-warning
-    else
-      clang_analyzer_warnIfReached(); // expected-warning {{REACHABLE}}
-  }
+  static_assert((short)65536 == 0, "");
+  static_assert((short)-65536 == 0, "");
+  static_assert((short)131072 == 0, "");
+  static_assert((short)-131072 == 0, "");
+  clang_analyzer_eval(x == 0);       // expected-warning{{UNKNOWN}}
+
+  // These are not truncated to short as zero.
+  static_assert((short)1 != 0, "");
+  clang_analyzer_eval(x == 1);       // expected-warning{{FALSE}}
+  static_assert((short)-1 != 0, "");
+  clang_analyzer_eval(x == -1);      // expected-warning{{FALSE}}
+  static_assert((short)65537 != 0, "");
+  clang_analyzer_eval(x == 65537);   // expected-warning{{FALSE}}
+  static_assert((short)-65537 != 0, "");
+  clang_analyzer_eval(x == -65537);  // expected-warning{{FALSE}}
+  static_assert((short)131073 != 0, "");
+  clang_analyzer_eval(x == 131073);  // expected-warning{{FALSE}}
+  static_assert((short)-131073 != 0, "");
+  clang_analyzer_eval(x == -131073); // expected-warning{{FALSE}}
+
+  // Check for implicit cast.
+  short s = y;
+  assert(s == 0);
+  clang_analyzer_eval(y == 0); // expected-warning{{UNKNOWN}}
 }

@@ -1351,12 +1351,12 @@ SVal SimpleSValBuilder::simplifySValOnce(ProgramStateRef State, SVal V) {
       auto I = Cached.find(S);
       if (I != Cached.end())
         return I->second;
-      SVal Op = getConstOrVisit(S->getOperand());
-      if (isUnchanged(S->getOperand(), Op))
+      const SymExpr *OpSym = S->getOperand();
+      SVal OpVal = getConstOrVisit(OpSym);
+      if (isUnchanged(OpSym, OpVal))
         return skip(S);
 
-      return cache(S,
-                   SVB.evalCast(Op, S->getType(), S->getOperand()->getType()));
+      return cache(S, SVB.evalCast(OpVal, S->getType(), OpSym->getType()));
     }
 
     SVal VisitUnarySymExpr(const UnarySymExpr *S) {
