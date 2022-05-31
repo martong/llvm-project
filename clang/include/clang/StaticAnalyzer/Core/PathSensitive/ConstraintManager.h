@@ -18,6 +18,7 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/SVals.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/SymExpr.h"
 #include "llvm/ADT/Optional.h"
+#include "llvm/ADT/SmallSet.h"
 #include "llvm/Support/SaveAndRestore.h"
 #include <memory>
 #include <utility>
@@ -143,6 +144,18 @@ protected:
   /// Note that this flag allows the ConstraintManager to be re-entrant,
   /// but not thread-safe.
   bool NotifyAssumeClients = true;
+
+  /// A helper class to simulate the call stack of nested assume calls.
+  class AssumeStackTy {
+  public:
+    void push(const ProgramState *S) { Aux.insert(S); }
+    void pop(const ProgramState *S) { Aux.erase(S); }
+    bool hasCycle(const ProgramState *S) const { return Aux.contains(S); }
+
+  private:
+    llvm::SmallSet<const ProgramState *, 4> Aux;
+  };
+  AssumeStackTy AssumeStack;
 
   virtual ProgramStateRef assumeInternal(ProgramStateRef state,
                                          DefinedSVal Cond, bool Assumption) = 0;
