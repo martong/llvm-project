@@ -153,6 +153,7 @@ protected:
     bool contains(const ProgramState *S) const {
       return llvm::find(Aux, S) != Aux.end();
     }
+    size_t size() { return Aux.size(); }
 
   private:
     llvm::SmallVector<const ProgramState *, 4> Aux;

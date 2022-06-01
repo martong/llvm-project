@@ -17,9 +17,24 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/ProgramState_Fwd.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/SVals.h"
 #include "llvm/ADT/ScopeExit.h"
+#include "llvm/ADT/Statistic.h"
 
 using namespace clang;
 using namespace ento;
+
+#define DEBUG_TYPE "CoreEngine"
+
+STATISTIC(NumAssume, "The # of assume calls");
+STATISTIC(NumAssumeRecurse, "The # of recursive assume calls");
+STATISTIC(AssumeStackSize01, "The # of assume stack size between 0 and 1");
+STATISTIC(AssumeStackSize23, "The # of assume stack size between 2 and 3");
+STATISTIC(AssumeStackSize45, "The # of assume stack size between 4 and 5");
+STATISTIC(AssumeStackSize67, "The # of assume stack size between 6 and 7");
+STATISTIC(AssumeStackSize89, "The # of assume stack size between 8 and 9");
+STATISTIC(AssumeStackSize1011, "The # of assume stack size between 10 and 11");
+STATISTIC(AssumeStackSize1213, "The # of assume stack size between 12 and 13");
+STATISTIC(AssumeStackSize1415, "The # of assume stack size between 14 and 15");
+STATISTIC(AssumeStackSize16XX, "The # of assume stack size greater equal than 16");
 
 ConstraintManager::~ConstraintManager() = default;
 
@@ -53,9 +68,30 @@ ConstraintManager::assumeDualImpl(ProgramStateRef &State,
   // fixpoint.
   // We avoid infinite recursion of assume calls by checking already visited
   // States on the stack of assume function calls.
+  ++NumAssume;
+  if (AssumeStack.size() < 2)
+    ++AssumeStackSize01;
+  else if (AssumeStack.size() < 4)
+    ++AssumeStackSize23;
+  else if (AssumeStack.size() < 6)
+    ++AssumeStackSize45;
+  else if (AssumeStack.size() < 8)
+    ++AssumeStackSize67;
+  else if (AssumeStack.size() < 10)
+    ++AssumeStackSize89;
+  else if (AssumeStack.size() < 12)
+    ++AssumeStackSize1011;
+  else if (AssumeStack.size() < 14)
+    ++AssumeStackSize1213;
+  else if (AssumeStack.size() < 16)
+    ++AssumeStackSize1415;
+  else
+    ++AssumeStackSize16XX;
   const ProgramState *RawSt = State.get();
-  if (AssumeStack.contains(RawSt))
+  if (AssumeStack.contains(RawSt)) {
+    ++NumAssumeRecurse;
     return {State, State};
+  }
   AssumeStack.push(RawSt);
   auto AssumeStackBuilder =
       llvm::make_scope_exit([this]() { AssumeStack.pop(); });
