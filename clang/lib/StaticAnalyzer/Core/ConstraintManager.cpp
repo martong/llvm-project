@@ -54,11 +54,11 @@ ConstraintManager::assumeDualImpl(ProgramStateRef &State,
   // We avoid infinite recursion of assume calls by checking already visited
   // States on the stack of assume function calls.
   const ProgramState *RawSt = State.get();
-  if (AssumeStack.hasCycle(RawSt))
+  if (AssumeStack.contains(RawSt))
     return {State, State};
   AssumeStack.push(RawSt);
   auto AssumeStackBuilder =
-      llvm::make_scope_exit([this, RawSt]() { AssumeStack.pop(RawSt); });
+      llvm::make_scope_exit([this]() { AssumeStack.pop(); });
 
   ProgramStateRef StTrue = Assume(true);
 

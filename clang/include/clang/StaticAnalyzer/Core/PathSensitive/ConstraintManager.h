@@ -148,12 +148,14 @@ protected:
   /// A helper class to simulate the call stack of nested assume calls.
   class AssumeStackTy {
   public:
-    void push(const ProgramState *S) { Aux.insert(S); }
-    void pop(const ProgramState *S) { Aux.erase(S); }
-    bool hasCycle(const ProgramState *S) const { return Aux.contains(S); }
+    void push(const ProgramState *S) { Aux.push_back(S); }
+    void pop() { Aux.pop_back(); }
+    bool contains(const ProgramState *S) const {
+      return llvm::find(Aux, S) != Aux.end();
+    }
 
   private:
-    llvm::SmallSet<const ProgramState *, 4> Aux;
+    llvm::SmallVector<const ProgramState *, 4> Aux;
   };
   AssumeStackTy AssumeStack;
 
