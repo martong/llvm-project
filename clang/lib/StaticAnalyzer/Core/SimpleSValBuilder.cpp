@@ -320,7 +320,6 @@ static NonLoc doRearrangeUnchecked(ProgramStateRef State,
   else
     llvm_unreachable("Operation not suitable for unchecked rearrangement!");
 
-  // FIXME: Can we use assume() without getting into an infinite recursion?
   if (LSym == RSym)
     return SVB.evalBinOpNN(State, Op, nonloc::ConcreteInt(LInt),
                            nonloc::ConcreteInt(RInt), ResultTy)
