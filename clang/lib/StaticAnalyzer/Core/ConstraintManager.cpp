@@ -54,7 +54,7 @@ ConstraintManager::assumeDualImpl(ProgramStateRef &State,
   // We avoid infinite recursion of assume calls by checking already visited
   // States on the stack of assume function calls.
   const ProgramState *RawSt = State.get();
-  if (AssumeStack.contains(RawSt))
+  if (LLVM_UNLIKELY(AssumeStack.contains(RawSt)))
     return {State, State};
   AssumeStack.push(RawSt);
   auto AssumeStackBuilder =

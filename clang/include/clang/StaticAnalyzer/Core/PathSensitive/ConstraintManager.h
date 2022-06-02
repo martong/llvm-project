@@ -18,7 +18,6 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/SVals.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/SymExpr.h"
 #include "llvm/ADT/Optional.h"
-#include "llvm/ADT/SmallSet.h"
 #include "llvm/Support/SaveAndRestore.h"
 #include <memory>
 #include <utility>
@@ -151,7 +150,7 @@ protected:
     void push(const ProgramState *S) { Aux.push_back(S); }
     void pop() { Aux.pop_back(); }
     bool contains(const ProgramState *S) const {
-      return llvm::find(Aux, S) != Aux.end();
+      return llvm::is_contained(Aux, S);
     }
 
   private:
