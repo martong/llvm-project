@@ -17,6 +17,12 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/ProgramState_Fwd.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/SVals.h"
 #include "llvm/ADT/ScopeExit.h"
+#include "llvm/ADT/Statistic.h"
+
+#define DEBUG_TYPE "CoreEngine"
+
+STATISTIC(NumAssume, "The # of assume calls");
+STATISTIC(NumAssumeOver, "The # of overconstrained states in assume calls");
 
 using namespace clang;
 using namespace ento;
@@ -47,8 +53,11 @@ template <typename AssumeFunction>
 ConstraintManager::ProgramStatePair
 ConstraintManager::assumeDualImpl(ProgramStateRef &State,
                                   AssumeFunction &Assume) {
-  if (State->isPosteriorlyOverconstrained())
+  ++NumAssume;
+  if (State->isPosteriorlyOverconstrained()) {
+    ++NumAssumeOver;
     return {State, State};
+  }
 
   // Assume functions might recurse (see `reAssume` or `tryRearrange`). During
   // the recursion the State might not change anymore, that means we reached a
