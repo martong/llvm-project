@@ -3691,6 +3691,43 @@ TEST(TransferTest, BinaryOperatorComma) {
               });
 }
 
+TEST(TransferTest, Maci) {
+  std::string Code = R"(
+    void target(int a) {
+      if (a < 0) {
+        (void)0;
+        // [[if_then]]
+      } else {
+        (void)0;
+        // [[if_else]]
+      }
+    }
+  )";
+  runDataflow(
+      Code, [](llvm::ArrayRef<
+                   std::pair<std::string, DataflowAnalysisState<NoopLattice>>>
+                   Results,
+               ASTContext &ASTCtx) {
+        ASSERT_THAT(Results,
+                    ElementsAre(Pair("if_else", _), Pair("if_then", _)));
+        const Environment &ThenEnv = Results[1].second.Env;
+        const Environment &ElseEnv = Results[0].second.Env;
+
+        const IfStmt *If = findIfStmt(ASTCtx);
+        ASSERT_THAT(If, NotNull());
+        const Expr *Cond = If->getCond();
+        Cond->dump();
+
+        BoolValue &ThenCondVal =
+            *cast<BoolValue>(ThenEnv.getValue(*Cond, SkipPast::None));
+        EXPECT_TRUE(ThenEnv.flowConditionImplies(ThenCondVal));
+
+        BoolValue &ElseCondVal =
+            *cast<BoolValue>(ElseEnv.getValue(*Cond, SkipPast::None));
+        EXPECT_TRUE(ElseEnv.flowConditionImplies(ElseEnv.makeNot(ElseCondVal)));
+      });
+}
+
 TEST(TransferTest, IfStmtBranchExtendsFlowCondition) {
   std::string Code = R"(
     void target(bool Foo) {

@@ -86,6 +86,8 @@ public:
   /// type-erased lattice element.
   virtual void transferTypeErased(const Stmt *, TypeErasedLattice &,
                                   Environment &) = 0;
+  virtual void branchTransferTypeErased(bool Branch, const Stmt *,
+                                        TypeErasedLattice &, Environment &) = 0;
 
   /// Determines whether to apply the built-in transfer functions, which model
   /// the heap and stack in the `Environment`.

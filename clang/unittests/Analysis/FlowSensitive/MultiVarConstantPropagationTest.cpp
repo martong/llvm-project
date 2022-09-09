@@ -191,6 +191,7 @@ MATCHER_P(Var, name,
           (llvm::Twine(negation ? "isn't" : "is") + " a variable named `" +
            name + "`")
               .str()) {
+  assert(isa<VarDecl>(arg));
   return arg->getName() == name;
 }
 

@@ -220,6 +220,8 @@ llvm::Error checkDataflow(
 ///  `Name` must be unique in `ASTCtx`.
 const ValueDecl *findValueDecl(ASTContext &ASTCtx, llvm::StringRef Name);
 
+const IfStmt * findIfStmt(ASTContext &ASTCtx);
+
 /// Creates and owns constraints which are boolean values.
 class ConstraintContext {
 public:

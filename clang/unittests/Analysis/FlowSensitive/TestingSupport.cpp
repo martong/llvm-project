@@ -130,3 +130,11 @@ const ValueDecl *test::findValueDecl(ASTContext &ASTCtx, llvm::StringRef Name) {
   assert(Result != nullptr);
   return Result;
 }
+
+const IfStmt *test::findIfStmt(ASTContext &ASTCtx) {
+  auto TargetNodes = match(ifStmt().bind("v"), ASTCtx);
+  assert(TargetNodes.size() == 1 && "Name must be unique");
+  auto *const Result = selectFirst<IfStmt>("v", TargetNodes);
+  assert(Result != nullptr);
+  return Result;
+}

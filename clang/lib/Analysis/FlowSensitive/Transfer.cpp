@@ -639,6 +639,7 @@ public:
   }
 
 private:
+
   BoolValue &getLogicOperatorSubExprValue(const Expr &SubExpr) {
     // `SubExpr` and its parent logic operator might be part of different basic
     // blocks. We try to access the value that is assigned to `SubExpr` in the
