@@ -71,52 +71,57 @@ static int blockIndexInPredecessor(const CFGBlock &Pred,
 
 /// Extends the flow condition of an environment based on a terminator
 /// statement.
-class TerminatorVisitor : public ConstStmtVisitor<TerminatorVisitor> {
+class TerminatorVisitor
+    : public ConstStmtVisitor<TerminatorVisitor,
+                              std::pair<const Expr *, bool>> {
 public:
-  TerminatorVisitor(const StmtToEnvMap &StmtToEnv, Environment &Env,
+  using RetTy = std::pair<const Expr *, bool>;
+  TerminatorVisitor(TypeErasedDataflowAnalysis &Analysis,
+                    const StmtToEnvMap &StmtToEnv, Environment &Env,
                     int BlockSuccIdx, TransferOptions TransferOpts)
-      : StmtToEnv(StmtToEnv), Env(Env), BlockSuccIdx(BlockSuccIdx),
-        TransferOpts(TransferOpts) {}
+      : Analysis(Analysis), StmtToEnv(StmtToEnv), Env(Env),
+        BlockSuccIdx(BlockSuccIdx), TransferOpts(TransferOpts) {}
 
-  void VisitIfStmt(const IfStmt *S) {
+  RetTy VisitIfStmt(const IfStmt *S) {
     auto *Cond = S->getCond();
     assert(Cond != nullptr);
-    extendFlowCondition(*Cond);
+    return extendFlowCondition(*Cond);
   }
 
-  void VisitWhileStmt(const WhileStmt *S) {
+  RetTy VisitWhileStmt(const WhileStmt *S) {
     auto *Cond = S->getCond();
     assert(Cond != nullptr);
-    extendFlowCondition(*Cond);
+    return extendFlowCondition(*Cond);
   }
 
-  void VisitDoStmt(const DoStmt *S) {
+  RetTy VisitDoStmt(const DoStmt *S) {
     auto *Cond = S->getCond();
     assert(Cond != nullptr);
-    extendFlowCondition(*Cond);
+    return extendFlowCondition(*Cond);
   }
 
-  void VisitForStmt(const ForStmt *S) {
+  RetTy VisitForStmt(const ForStmt *S) {
     auto *Cond = S->getCond();
     if (Cond != nullptr)
-      extendFlowCondition(*Cond);
+      return extendFlowCondition(*Cond);
+    return {nullptr, false};
   }
 
-  void VisitBinaryOperator(const BinaryOperator *S) {
+  RetTy VisitBinaryOperator(const BinaryOperator *S) {
     assert(S->getOpcode() == BO_LAnd || S->getOpcode() == BO_LOr);
     auto *LHS = S->getLHS();
     assert(LHS != nullptr);
-    extendFlowCondition(*LHS);
+    return extendFlowCondition(*LHS);
   }
 
-  void VisitConditionalOperator(const ConditionalOperator *S) {
+  RetTy VisitConditionalOperator(const ConditionalOperator *S) {
     auto *Cond = S->getCond();
     assert(Cond != nullptr);
-    extendFlowCondition(*Cond);
+    return extendFlowCondition(*Cond);
   }
 
 private:
-  void extendFlowCondition(const Expr &Cond) {
+  RetTy extendFlowCondition(const Expr &Cond) {
     // The terminator sub-expression might not be evaluated.
     if (Env.getStorageLocation(Cond, SkipPast::None) == nullptr)
       transfer(StmtToEnv, Cond, Env, TransferOpts);
@@ -140,14 +145,19 @@ private:
       Env.setValue(*Loc, *Val);
     }
 
+    bool Assumption = true;
     // The condition must be inverted for the successor that encompasses the
     // "else" branch, if such exists.
-    if (BlockSuccIdx == 1)
+    if (BlockSuccIdx == 1) {
       Val = &Env.makeNot(*Val);
+      Assumption = false;
+    }
 
     Env.addToFlowCondition(*Val);
+    return {&Cond, Assumption};
   }
 
+  TypeErasedDataflowAnalysis &Analysis;
   const StmtToEnvMap &StmtToEnv;
   Environment &Env;
   int BlockSuccIdx;
@@ -239,10 +249,14 @@ computeBlockInputState(const CFGBlock &Block, AnalysisContext &AC) {
     if (BuiltinTransferOpts) {
       if (const Stmt *PredTerminatorStmt = Pred->getTerminatorStmt()) {
         const StmtToEnvMapImpl StmtToEnv(AC.CFCtx, AC.BlockStates);
-        TerminatorVisitor(StmtToEnv, PredState.Env,
-                          blockIndexInPredecessor(*Pred, Block),
-                          *BuiltinTransferOpts)
-            .Visit(PredTerminatorStmt);
+        auto [Cond, Assumption] =
+            TerminatorVisitor(Analysis, StmtToEnv, PredState.Env,
+                              blockIndexInPredecessor(*Pred, Block),
+                              *BuiltinTransferOpts)
+                .Visit(PredTerminatorStmt);
+        if (Cond)
+          Analysis.branchTransferTypeErased(Assumption, Cond, PredState.Lattice,
+                                            PredState.Env);
       }
     }
 
