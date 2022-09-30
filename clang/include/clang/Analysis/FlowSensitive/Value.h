@@ -70,6 +70,9 @@ public:
   void setProperty(llvm::StringRef Name, Value &Val) {
     Properties.insert_or_assign(Name, &Val);
   }
+  void setProperty(llvm::StringRef Name, Value &&Val) {
+    Properties.insert_or_assign(Name, &Val);
+  }
 
 private:
   Kind ValKind;
