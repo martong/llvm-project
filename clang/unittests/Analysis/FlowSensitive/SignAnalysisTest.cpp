@@ -130,65 +130,15 @@ SignProperties getSignProperties(const Value &Val, Environment &Env) {
     dyn_cast_or_null<BoolValue>(Val.getProperty("pos"))};
 }
 
-void initializeInteger(const DeclStmt *D, const MatchFinder::MatchResult &M,
-                       LatticeTransferState &State) {
+void transferUninitializedInt(const DeclStmt *D,
+                              const MatchFinder::MatchResult &M,
+                              LatticeTransferState &State) {
   const auto *Var = M.Nodes.getNodeAs<clang::VarDecl>(kVar);
   assert(Var != nullptr);
-
   const StorageLocation *Loc =
       State.Env.getStorageLocation(*Var, SkipPast::None);
-  assert(isa_and_nonnull<ScalarStorageLocation>(Loc));
   Value *Val = State.Env.getValue(*Loc);
-  // int A = -1; // IntegerValue
-  // int B = 0;  // BoolValue
-  // int C = 1;  // BoolValue
-  assert((isa_and_nonnull<IntegerValue, BoolValue>(Val)));
-
-  const ASTContext &Context = *M.Context;
-  SignLattice L;
-
-  if (const auto *InitE = M.Nodes.getNodeAs<clang::Expr>(kInit)) {
-    Expr::EvalResult R;
-    // Initialized with a constant.
-    if (InitE->EvaluateAsInt(R, Context) && R.Val.isInt()) {
-      L = SignLattice(R.Val.getInt().getExtValue());
-    } else { // Initialized with an arbitrary expression.
-      // Get the stored properties of the init expression and assign them to
-      // this variable as well, if the sign properties are set.
-      if (Value *InitVal = State.Env.getValue(*InitE, SkipPast::None))
-        if (InitVal->getProperty(
-                "neg")) { // If one property is set then the rest is also set.
-          // Properties are bound to the value of the init expression.
-          State.Env.setValue(*Loc, *InitVal);
-          return;
-        }
-
-      // Initialize to top, if we don't know anything about the init expr.
-      L = SignLattice::top();
-    }
-  } else { // Uninitialized.
-    // An unitialized variable holds *some* value, but we don't know what it
-    // is (it is implementation defined), so we set it to top.
-    L = SignLattice::top();
-  }
-
-  switch (L.State) {
-  case SignLattice::SignState::Bottom:
-    break;
-  case SignLattice::SignState::Negative:
-    initNegative(*Val, State.Env);
-    break;
-  case SignLattice::SignState::Zero:
-    initZero(*Val, State.Env);
-    break;
-  case SignLattice::SignState::Positive:
-    initPositive(*Val, State.Env);
-    break;
-  case SignLattice::SignState::Top:
-    initUnknown(*Val, State.Env);
-    break;
-  }
-
+  initUnknown(*Val, State.Env);
 }
 
 void transferUnaryMinus(const UnaryOperator *UO,
@@ -262,58 +212,79 @@ void transferUnaryNot(const UnaryOperator *UO,
   }
 }
 
-void transferUnaryNot_old(const UnaryOperator *Op,
+void transferExpr(const Expr *E,
                                  const MatchFinder::MatchResult &M,
                                  LatticeTransferState &State) {
-  const auto *Var = M.Nodes.getNodeAs<clang::VarDecl>(kVar);
-  assert(Var != nullptr);
+  const ASTContext &Context = *M.Context;
+  StorageLocation *Loc =
+      State.Env.getStorageLocation(*E, SkipPast::None);
+  if (!Loc) {
+    Loc = &State.Env.createStorageLocation(*E);
+    State.Env.setStorageLocation(*E, *Loc);
+  }
+  Value *Val = State.Env.getValue(*Loc);
+  if (!Val) {
+    Val = State.Env.createValue(Context.IntTy);
+    State.Env.setValue(*Loc, *Val);
+  }
+  // The sign symbolic values have been initialized already.
+  if (Val->getProperty("neg"))
+    return;
 
-  // Boolean representing the comparison between the two pointer values,
-  // automatically created by the dataflow framework
-  auto& Cond =
-      *cast<BoolValue>(State.Env.getValue(*Op, SkipPast::None));
+  Expr::EvalResult R;
+  // An integer expression which we cannot evaluate.
+  if (!(E->EvaluateAsInt(R, Context) && R.Val.isInt())) {
+    initUnknown(*Val, State.Env);
+    return;
+  }
 
-  Value *Val = getValue(Var, State);
-  assert(Val);
-
-  //BoolValue *BVal = dyn_cast<BoolValue>(Val);
-  //if (!BVal) {
-    //IntegerValue *IV = cast<IntegerValue>(Val);
-    //// FIXME How to convert to BoolValue?
-    //// If IntegerValue stored the concrete integer, e.g. 42 in case of
-    //// `int a = 42` then we could convert it to a BoolValue.
-  //}
-
-  BoolValue &ZeroProp = State.Env.makeAtomicBoolValue();
-  Val->setProperty("zero", ZeroProp);
-  // !a is true ==> a is zero
-  State.Env.addToFlowCondition(State.Env.makeImplication(Cond, ZeroProp));
-
-  BoolValue &TopProp = State.Env.makeAtomicBoolValue();
-  Val->setProperty("top", TopProp);
-  // !a is false ==> a is top (can be both negative or positive)
-  State.Env.addToFlowCondition(
-      State.Env.makeImplication(State.Env.makeNot(Cond), TopProp));
+  const SignLattice L = SignLattice(R.Val.getInt().getExtValue());
+  switch (L.State) {
+  case SignLattice::SignState::Negative:
+    initNegative(*Val, State.Env);
+    break;
+  case SignLattice::SignState::Zero:
+    initZero(*Val, State.Env);
+    break;
+  case SignLattice::SignState::Positive:
+    initPositive(*Val, State.Env);
+    break;
+  case SignLattice::SignState::Top:
+    llvm_unreachable("should not be top here");
+    break;
+  case SignLattice::SignState::Bottom:
+    llvm_unreachable("should not be bottom here");
+    break;
+  }
 }
 
 auto refToVar() { return declRefExpr(to(varDecl().bind(kVar))); }
 
 auto buildTransferMatchSwitch() {
   return CFGMatchSwitchBuilder<LatticeTransferState>()
+
+      // -a
       .CaseOfCFGStmt<UnaryOperator>(
           unaryOperator(hasOperatorName("-"),
                         hasUnaryOperand(hasDescendant(refToVar()))),
           transferUnaryMinus)
-      .CaseOfCFGStmt<DeclStmt>(
-          declStmt(hasSingleDecl(
-              varDecl(decl().bind(kVar), hasType(isInteger()),
-                      optionally(hasInitializer(expr().bind(kInit))))
-                  )),
-          initializeInteger)
+
+      // !a
       .CaseOfCFGStmt<UnaryOperator>(
           unaryOperator(hasOperatorName("!"),
                         hasUnaryOperand(hasDescendant(refToVar()))),
           transferUnaryNot)
+
+      // int a;
+      .CaseOfCFGStmt<DeclStmt>(
+          declStmt(hasSingleDecl(
+              varDecl(decl().bind(kVar), hasType(isInteger()),
+                      unless(hasInitializer(expr()))))),
+          transferUninitializedInt)
+
+      .CaseOfCFGStmt<Expr>(
+          expr(hasType(isInteger())),
+          transferExpr)
 
       .Build();
 }
