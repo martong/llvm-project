@@ -33,7 +33,6 @@
 #include "llvm/Support/Error.h"
 #include "llvm/Testing/Support/Annotations.h"
 #include "llvm/Testing/Support/Error.h"
-#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include <cstdint>
 #include <memory>
@@ -47,9 +46,6 @@ using namespace clang;
 using namespace dataflow;
 using namespace ast_matchers;
 using namespace test;
-using ::testing::NotNull;
-using ::testing::IsEmpty;
-using ::testing::Pair;
 using ::testing::UnorderedElementsAre;
 
 // Models the signedness of a variable, for all paths through
@@ -115,11 +111,7 @@ void initZero(Value &Val, Environment &Env) {
     Val.setProperty("zero", Env.getBoolLiteralValue(true));
     Val.setProperty("pos", Env.getBoolLiteralValue(false));
 }
-void initTop(Value &Val, Environment &Env) {
-    Val.setProperty("neg", Env.getBoolLiteralValue(false));
-    Val.setProperty("zero", Env.getBoolLiteralValue(false));
-    Val.setProperty("pos", Env.getBoolLiteralValue(false));
-}
+
 struct SignProperties {
   BoolValue *Neg, *Zero, *Pos;
 };
@@ -136,12 +128,6 @@ SignProperties getSignProperties(const Value &Val, Environment &Env) {
     dyn_cast_or_null<BoolValue>(Val.getProperty("neg")),
     dyn_cast_or_null<BoolValue>(Val.getProperty("zero")),
     dyn_cast_or_null<BoolValue>(Val.getProperty("pos"))};
-}
-void setSignProperties(Value &Val, Environment &Env,
-                       const SignProperties &Props) {
-  Val.setProperty("neg", *Props.Neg);
-  Val.setProperty("zero", *Props.Zero);
-  Val.setProperty("pos", *Props.Pos);
 }
 
 void initializeInteger(const DeclStmt *D, const MatchFinder::MatchResult &M,
@@ -205,24 +191,14 @@ void initializeInteger(const DeclStmt *D, const MatchFinder::MatchResult &M,
 
 }
 
-void transferIntegerLiteral(const IntegerLiteral *I,
-                                 const MatchFinder::MatchResult &M,
-                                 LatticeTransferState &State) {
-  auto &Loc = State.Env.createStorageLocation(*I);
-  State.Env.setStorageLocation(*I, Loc);
-  BoolValue &V = State.Env.makeAtomicBoolValue();
-  State.Env.setValue(Loc, V);
-  if (I->getValue().isZero())
-    V.setProperty("zero", State.Env.getBoolLiteralValue(true));
-  else
-    V.setProperty("pos", State.Env.getBoolLiteralValue(true));
-}
-
 void transferUnaryMinus(const UnaryOperator *UO,
                                  const MatchFinder::MatchResult &M,
                                  LatticeTransferState &State) {
-  const auto *OperandVal = dyn_cast_or_null<BoolValue>(
-      State.Env.getValue(*UO->getSubExpr(), SkipPast::None));
+  // FIXME hoist copy paste
+  // The DeclRefExpr refers to this variable in the operand.
+  const auto *OpdVar = M.Nodes.getNodeAs<clang::VarDecl>(kVar);
+  assert(OpdVar != nullptr);
+  const auto *OperandVal = State.Env.getValue(*OpdVar, SkipPast::None);
   if (!OperandVal)
     return;
 
@@ -324,9 +300,9 @@ auto refToVar() { return declRefExpr(to(varDecl().bind(kVar))); }
 
 auto buildTransferMatchSwitch() {
   return CFGMatchSwitchBuilder<LatticeTransferState>()
-      .CaseOfCFGStmt<IntegerLiteral>(integerLiteral(), transferIntegerLiteral)
       .CaseOfCFGStmt<UnaryOperator>(
-          unaryOperator(hasOperatorName("-")),
+          unaryOperator(hasOperatorName("-"),
+                        hasUnaryOperand(hasDescendant(refToVar()))),
           transferUnaryMinus)
       .CaseOfCFGStmt<DeclStmt>(
           declStmt(hasSingleDecl(
@@ -471,50 +447,6 @@ testing::AssertionResult isTop(const Node *N, ASTContext &ASTCtx,
   if(!R)
     return R;
   return isPropertySet(Env, ASTCtx, N, "neg", false);
-}
-
-TEST(SignAnalysisTest, BasicLiterals) {
-  std::string Code = R"(
-    void fun() {
-      2;
-      1;
-      0;
-      // [[p]]
-    }
-  )";
-  runDataflow(Code,
-      [](const llvm::StringMap<DataflowAnalysisState<NoopLattice>> &Results,
-         ASTContext &ASTCtx) {
-        ASSERT_THAT(Results.keys(), UnorderedElementsAre("p"));
-        const Environment &Env = getEnvironmentAtAnnotation(Results, "p");
-
-        const auto *Two = findFirst<IntegerLiteral>(ASTCtx, integerLiteral(equals(2)));
-        const auto *One = findFirst<IntegerLiteral>(ASTCtx, integerLiteral(equals(1)));
-        const auto *Zero = findFirst<IntegerLiteral>(ASTCtx, integerLiteral(equals(0)));
-        EXPECT_TRUE(isPositive(Two, ASTCtx, Env));
-        EXPECT_TRUE(isPositive(One, ASTCtx, Env));
-        EXPECT_TRUE(isZero(Zero, ASTCtx, Env));
-      },
-      LangStandard::lang_cxx17);
-}
-
-TEST(SignAnalysisTest, UnaryLiterals) {
-  std::string Code = R"(
-    void fun() {
-      -1;
-      // [[p]]
-    }
-  )";
-  runDataflow(Code,
-      [](const llvm::StringMap<DataflowAnalysisState<NoopLattice>> &Results,
-         ASTContext &ASTCtx) {
-        ASSERT_THAT(Results.keys(), UnorderedElementsAre("p"));
-        const Environment &Env = getEnvironmentAtAnnotation(Results, "p");
-
-        const auto *MinusOne = findFirst<UnaryOperator>(ASTCtx, unaryOperator());
-        EXPECT_TRUE(isNegative(MinusOne, ASTCtx, Env));
-      },
-      LangStandard::lang_cxx17);
 }
 
 TEST(SignAnalysisTest, Init) {
