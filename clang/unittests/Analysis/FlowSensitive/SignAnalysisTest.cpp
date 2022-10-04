@@ -170,6 +170,72 @@ getValueAndSignProperties(const UnaryOperator *UO,
   return {UOVal, UOPs, OpdPs};
 }
 
+void transferBinary(const BinaryOperator *BO,
+                                 const MatchFinder::MatchResult &M,
+                                 LatticeTransferState &State) {
+  StorageLocation *Loc =
+      State.Env.getStorageLocation(*BO, SkipPast::None);
+  if (!Loc) {
+    Loc = &State.Env.createStorageLocation(*BO);
+    State.Env.setStorageLocation(*BO, *Loc);
+  }
+  BoolValue *Comp = cast_or_null<BoolValue>(State.Env.getValue(*Loc));
+  if (!Comp) {
+    Comp = &State.Env.makeAtomicBoolValue();
+    State.Env.setValue(*Loc, *Comp);
+  }
+
+  auto *NegatedComp = &State.Env.makeNot(*Comp);
+
+  auto* LHS = State.Env.getValue(*BO->getLHS(), SkipPast::None);
+  auto* RHS = State.Env.getValue(*BO->getRHS(), SkipPast::None);
+
+  if (!LHS || !RHS) return;
+
+  SignProperties LHSPs = getSignProperties(*LHS, State.Env);
+  SignProperties RHSPs = getSignProperties(*RHS, State.Env);
+  if (!LHSPs.Neg || !RHSPs.Neg)
+    return;
+
+  switch (BO->getOpcode()) {
+  case BO_GT:
+    // pos > pos
+    State.Env.addToFlowCondition(
+        State.Env.makeImplication(*Comp,
+        State.Env.makeImplication(*RHSPs.Pos, *LHSPs.Pos)));
+    // pos > zero
+    State.Env.addToFlowCondition(
+        State.Env.makeImplication(*Comp,
+        State.Env.makeImplication(*RHSPs.Zero, *LHSPs.Pos)));
+    break;
+  case BO_LT:
+    // neg < neg
+    State.Env.addToFlowCondition(
+        State.Env.makeImplication(*Comp,
+        State.Env.makeImplication(*RHSPs.Neg, *LHSPs.Neg)));
+    // neg < zero
+    State.Env.addToFlowCondition(
+        State.Env.makeImplication(*Comp,
+        State.Env.makeImplication(*RHSPs.Zero, *LHSPs.Neg)));
+    break;
+  case BO_GE:
+    // pos >= pos
+    State.Env.addToFlowCondition(
+        State.Env.makeImplication(*Comp,
+        State.Env.makeImplication(*RHSPs.Pos, *LHSPs.Pos)));
+    break;
+  case BO_LE:
+    // neg <= neg
+    State.Env.addToFlowCondition(
+        State.Env.makeImplication(*Comp,
+        State.Env.makeImplication(*RHSPs.Neg, *LHSPs.Neg)));
+    break;
+  default:
+    llvm_unreachable("not implemented");
+  }
+
+}
+
 void transferUnaryMinus(const UnaryOperator *UO,
                                  const MatchFinder::MatchResult &M,
                                  LatticeTransferState &State) {
@@ -258,6 +324,10 @@ auto refToVar() { return declRefExpr(to(varDecl().bind(kVar))); }
 
 auto buildTransferMatchSwitch() {
   return CFGMatchSwitchBuilder<LatticeTransferState>()
+      // a op b
+      .CaseOfCFGStmt<BinaryOperator>(
+          binaryOperator(isComparisonOperator()),
+          transferBinary)
 
       // -a
       .CaseOfCFGStmt<UnaryOperator>(
@@ -368,7 +438,7 @@ testing::AssertionResult isPropertySet(const Environment &Env,
   if (Env.flowConditionImplies(*BVProp) != Val)
     return testing::AssertionFailure()
            << Property << " is " << (Val ? "not" : "") << " implied"
-           << ", but should " << (Val ? "" : "not") << "be";
+           << ", but should " << (Val ? "" : "not ") << "be";
   return testing::AssertionSuccess();
 }
 
@@ -537,6 +607,194 @@ TEST(SignAnalysisTest, UnaryNotInIf) {
         EXPECT_TRUE(isTop(A, ASTCtx, EnvQ));
         EXPECT_TRUE(isTop(QA, ASTCtx, EnvQ));
         EXPECT_TRUE(isZero(QNA, ASTCtx, EnvQ));
+      },
+      LangStandard::lang_cxx17);
+}
+
+TEST(SignAnalysisTest, BinaryGT) {
+  std::string Code = R"(
+    int foo();
+    void fun() {
+      int a = foo();
+      int b = 1;
+      if (a > 1) {
+        (void)0;
+        // [[p]]
+      }
+      if (a > 0) {
+        (void)0;
+        // [[q]]
+      }
+      if (a > -1) {
+        (void)0;
+        // [[r]]
+      }
+      if (a > b) {
+        (void)0;
+        // [[s]]
+      }
+    }
+  )";
+  runDataflow(Code,
+      [](const llvm::StringMap<DataflowAnalysisState<NoopLattice>> &Results,
+         ASTContext &ASTCtx) {
+        ASSERT_THAT(Results.keys(), UnorderedElementsAre("p", "q", "r", "s"));
+        const Environment &EnvP = getEnvironmentAtAnnotation(Results, "p");
+        const Environment &EnvQ = getEnvironmentAtAnnotation(Results, "q");
+        const Environment &EnvR = getEnvironmentAtAnnotation(Results, "r");
+        const Environment &EnvS = getEnvironmentAtAnnotation(Results, "s");
+
+        const ValueDecl *A = findValueDecl(ASTCtx, "a");
+
+        // p
+        EXPECT_TRUE(isPositive(A, ASTCtx, EnvP));
+        // q
+        EXPECT_TRUE(isPositive(A, ASTCtx, EnvQ));
+        // r
+        EXPECT_TRUE(isTop(A, ASTCtx, EnvR));
+        // s
+        EXPECT_TRUE(isPositive(A, ASTCtx, EnvS));
+      },
+      LangStandard::lang_cxx17);
+}
+
+TEST(SignAnalysisTest, BinaryLT) {
+  std::string Code = R"(
+    int foo();
+    void fun() {
+      int a = foo();
+      int b = -1;
+      if (a < -1) {
+        (void)0;
+        // [[p]]
+      }
+      if (a < 0) {
+        (void)0;
+        // [[q]]
+      }
+      if (a < 1) {
+        (void)0;
+        // [[r]]
+      }
+      if (a < b) {
+        (void)0;
+        // [[s]]
+      }
+    }
+  )";
+  runDataflow(Code,
+      [](const llvm::StringMap<DataflowAnalysisState<NoopLattice>> &Results,
+         ASTContext &ASTCtx) {
+        ASSERT_THAT(Results.keys(), UnorderedElementsAre("p", "q", "r", "s"));
+        const Environment &EnvP = getEnvironmentAtAnnotation(Results, "p");
+        const Environment &EnvQ = getEnvironmentAtAnnotation(Results, "q");
+        const Environment &EnvR = getEnvironmentAtAnnotation(Results, "r");
+        const Environment &EnvS = getEnvironmentAtAnnotation(Results, "s");
+
+        const ValueDecl *A = findValueDecl(ASTCtx, "a");
+
+        // p
+        EXPECT_TRUE(isNegative(A, ASTCtx, EnvP));
+        // q
+        EXPECT_TRUE(isNegative(A, ASTCtx, EnvQ));
+        // r
+        EXPECT_TRUE(isTop(A, ASTCtx, EnvR));
+        // s
+        EXPECT_TRUE(isNegative(A, ASTCtx, EnvS));
+      },
+      LangStandard::lang_cxx17);
+}
+
+TEST(SignAnalysisTest, BinaryGE) {
+  std::string Code = R"(
+    int foo();
+    void fun() {
+      int a = foo();
+      int b = 1;
+      if (a >= 1) {
+        (void)0;
+        // [[p]]
+      }
+      if (a >= 0) {
+        (void)0;
+        // [[q]]
+      }
+      if (a >= -1) {
+        (void)0;
+        // [[r]]
+      }
+      if (a >= b) {
+        (void)0;
+        // [[s]]
+      }
+    }
+  )";
+  runDataflow(Code,
+      [](const llvm::StringMap<DataflowAnalysisState<NoopLattice>> &Results,
+         ASTContext &ASTCtx) {
+        ASSERT_THAT(Results.keys(), UnorderedElementsAre("p", "q", "r", "s"));
+        const Environment &EnvP = getEnvironmentAtAnnotation(Results, "p");
+        const Environment &EnvQ = getEnvironmentAtAnnotation(Results, "q");
+        const Environment &EnvR = getEnvironmentAtAnnotation(Results, "r");
+        const Environment &EnvS = getEnvironmentAtAnnotation(Results, "s");
+
+        const ValueDecl *A = findValueDecl(ASTCtx, "a");
+
+        // p
+        EXPECT_TRUE(isPositive(A, ASTCtx, EnvP));
+        // q
+        EXPECT_TRUE(isTop(A, ASTCtx, EnvQ));
+        // r
+        EXPECT_TRUE(isTop(A, ASTCtx, EnvR));
+        // s
+        EXPECT_TRUE(isPositive(A, ASTCtx, EnvS));
+      },
+      LangStandard::lang_cxx17);
+}
+
+TEST(SignAnalysisTest, BinaryLE) {
+  std::string Code = R"(
+    int foo();
+    void fun() {
+      int a = foo();
+      int b = -1;
+      if (a <= -1) {
+        (void)0;
+        // [[p]]
+      }
+      if (a <= 0) {
+        (void)0;
+        // [[q]]
+      }
+      if (a <= 1) {
+        (void)0;
+        // [[r]]
+      }
+      if (a <= b) {
+        (void)0;
+        // [[s]]
+      }
+    }
+  )";
+  runDataflow(Code,
+      [](const llvm::StringMap<DataflowAnalysisState<NoopLattice>> &Results,
+         ASTContext &ASTCtx) {
+        ASSERT_THAT(Results.keys(), UnorderedElementsAre("p", "q", "r", "s"));
+        const Environment &EnvP = getEnvironmentAtAnnotation(Results, "p");
+        const Environment &EnvQ = getEnvironmentAtAnnotation(Results, "q");
+        const Environment &EnvR = getEnvironmentAtAnnotation(Results, "r");
+        const Environment &EnvS = getEnvironmentAtAnnotation(Results, "s");
+
+        const ValueDecl *A = findValueDecl(ASTCtx, "a");
+
+        // p
+        EXPECT_TRUE(isNegative(A, ASTCtx, EnvP));
+        // q
+        EXPECT_TRUE(isTop(A, ASTCtx, EnvQ));
+        // r
+        EXPECT_TRUE(isTop(A, ASTCtx, EnvR));
+        // s
+        EXPECT_TRUE(isNegative(A, ASTCtx, EnvS));
       },
       LangStandard::lang_cxx17);
 }
