@@ -461,8 +461,7 @@ TEST(SignAnalysisTest, UnaryMinus) {
   std::string Code = R"(
     void fun() {
       int a = 1;
-      int b = a;
-      int c = -a;
+      int b = -a;
       // [[p]]
     }
   )";
@@ -474,26 +473,47 @@ TEST(SignAnalysisTest, UnaryMinus) {
 
         const ValueDecl *A = findValueDecl(ASTCtx, "a");
         const ValueDecl *B = findValueDecl(ASTCtx, "b");
-        const ValueDecl *C = findValueDecl(ASTCtx, "c");
         EXPECT_TRUE(isPositive(A, ASTCtx, Env));
-        EXPECT_TRUE(isPositive(B, ASTCtx, Env));
-        EXPECT_TRUE(isNegative(C, ASTCtx, Env));
+        EXPECT_TRUE(isNegative(B, ASTCtx, Env));
       },
       LangStandard::lang_cxx17);
 }
 
 TEST(SignAnalysisTest, UnaryNot) {
   std::string Code = R"(
+    void fun() {
+      int a = 2;
+      int b = !a;
+      // [[p]]
+    }
+  )";
+  runDataflow(Code,
+      [](const llvm::StringMap<DataflowAnalysisState<NoopLattice>> &Results,
+         ASTContext &ASTCtx) {
+        ASSERT_THAT(Results.keys(), UnorderedElementsAre("p"));
+        const Environment &Env = getEnvironmentAtAnnotation(Results, "p");
+
+        const ValueDecl *A = findValueDecl(ASTCtx, "a");
+        const ValueDecl *B = findValueDecl(ASTCtx, "b");
+        EXPECT_TRUE(isPositive(A, ASTCtx, Env));
+        EXPECT_TRUE(isZero(B, ASTCtx, Env));
+      },
+      LangStandard::lang_cxx17);
+}
+
+TEST(SignAnalysisTest, UnaryNotInIf) {
+  std::string Code = R"(
     int foo();
     void fun() {
       int a = foo();
       if (!a) {
         int b1;
-        b1 = !a;
+        int p_a = a;
+        int p_not_a = !a;
         // [[p]]
       } else {
-        int b2;
-        b2 = !a;
+        int q_a = a;
+        int q_not_a = !a;
         // [[q]]
       }
     }
@@ -506,16 +526,20 @@ TEST(SignAnalysisTest, UnaryNot) {
         const Environment &EnvQ = getEnvironmentAtAnnotation(Results, "q");
 
         const ValueDecl *A = findValueDecl(ASTCtx, "a");
-        const ValueDecl *B1 = findValueDecl(ASTCtx, "b1");
-        const ValueDecl *B2 = findValueDecl(ASTCtx, "b2");
+        const ValueDecl *PA = findValueDecl(ASTCtx, "p_a");
+        const ValueDecl *PNA = findValueDecl(ASTCtx, "p_not_a");
+        const ValueDecl *QA = findValueDecl(ASTCtx, "q_a");
+        const ValueDecl *QNA = findValueDecl(ASTCtx, "q_not_a");
 
         // p
         EXPECT_TRUE(isZero(A, ASTCtx, EnvP));
-        EXPECT_TRUE(isTop(B1, ASTCtx, EnvP));
+        EXPECT_TRUE(isZero(PA, ASTCtx, EnvP));
+        EXPECT_TRUE(isTop(PNA, ASTCtx, EnvP));
 
         // q
         EXPECT_TRUE(isTop(A, ASTCtx, EnvQ));
-        EXPECT_TRUE(isZero(B2, ASTCtx, EnvQ));
+        EXPECT_TRUE(isTop(QA, ASTCtx, EnvQ));
+        EXPECT_TRUE(isZero(QNA, ASTCtx, EnvQ));
       },
       LangStandard::lang_cxx17);
 }
