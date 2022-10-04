@@ -141,72 +141,68 @@ void transferUninitializedInt(const DeclStmt *D,
   initUnknown(*Val, State.Env);
 }
 
-void transferUnaryMinus(const UnaryOperator *UO,
-                                 const MatchFinder::MatchResult &M,
-                                 LatticeTransferState &State) {
-  // FIXME hoist copy paste
+std::tuple<Value *, SignProperties, SignProperties>
+getValueAndSignProperties(const UnaryOperator *UO,
+                          const MatchFinder::MatchResult &M,
+                          LatticeTransferState &State) {
   // The DeclRefExpr refers to this variable in the operand.
   const auto *OpdVar = M.Nodes.getNodeAs<clang::VarDecl>(kVar);
   assert(OpdVar != nullptr);
   const auto *OperandVal = State.Env.getValue(*OpdVar, SkipPast::None);
   if (!OperandVal)
-    return;
+    return {nullptr, {}, {}};
 
+  // Value of the unary op.
   auto *UOVal = State.Env.getValue(*UO, SkipPast::None);
-  if(!UOVal) {
-    // FIXME hoist copy paste
+  if (!UOVal) {
     auto &Loc = State.Env.createStorageLocation(*UO);
     State.Env.setStorageLocation(*UO, Loc);
     UOVal = &State.Env.makeAtomicBoolValue();
     State.Env.setValue(Loc, *UOVal);
   }
 
+  // Properties for the operand (sub expression).
   SignProperties OpdPs = getSignProperties(*OperandVal, State.Env);
+  if (!OpdPs.Neg)
+    return {nullptr, {}, {}};
+  // Properties for the operator expr itself.
   SignProperties UOPs = initUnknown(*UOVal, State.Env);
+  return {UOVal, UOPs, OpdPs};
+}
+
+void transferUnaryMinus(const UnaryOperator *UO,
+                                 const MatchFinder::MatchResult &M,
+                                 LatticeTransferState &State) {
+  auto [UOVal, UOPs, OpdPs] = getValueAndSignProperties(UO, M, State);
+  if (!UOVal)
+    return;
 
   // a is pos ==> -a is neg
-  if (OpdPs.Pos)
-    State.Env.addToFlowCondition(
-        State.Env.makeImplication(*OpdPs.Pos, *UOPs.Neg));
+  State.Env.addToFlowCondition(
+      State.Env.makeImplication(*OpdPs.Pos, *UOPs.Neg));
   // a is neg ==> -a is pos
-  if (OpdPs.Neg)
-    State.Env.addToFlowCondition(
-        State.Env.makeImplication(*OpdPs.Neg, *UOPs.Pos));
+  State.Env.addToFlowCondition(
+      State.Env.makeImplication(*OpdPs.Neg, *UOPs.Pos));
   // a is zero ==> -a is zero
-  if (OpdPs.Zero)
-    State.Env.addToFlowCondition(
-        State.Env.makeImplication(*OpdPs.Zero, *UOPs.Zero));
+  State.Env.addToFlowCondition(
+      State.Env.makeImplication(*OpdPs.Zero, *UOPs.Zero));
 }
 
 void transferUnaryNot(const UnaryOperator *UO,
                                  const MatchFinder::MatchResult &M,
                                  LatticeTransferState &State) {
-  // The DeclRefExpr refers to this variable in the operand.
-  const auto *OpdVar = M.Nodes.getNodeAs<clang::VarDecl>(kVar);
-  assert(OpdVar != nullptr);
-  const auto *OperandVal = State.Env.getValue(*OpdVar, SkipPast::None);
-  if (!OperandVal)
+  auto [UOVal, UOPs, OpdPs] = getValueAndSignProperties(UO, M, State);
+  if (!UOVal)
     return;
 
-  auto *UOVal = State.Env.getValue(*UO, SkipPast::None);
-  if(!UOVal) {
-    // FIXME hoist copy paste
-    auto &Loc = State.Env.createStorageLocation(*UO);
-    State.Env.setStorageLocation(*UO, Loc);
-    UOVal = &State.Env.makeAtomicBoolValue();
-    State.Env.setValue(Loc, *UOVal);
-  }
-
-  SignProperties OpdPs = getSignProperties(*OperandVal, State.Env);
-  SignProperties UOPs = initUnknown(*UOVal, State.Env);
-
-  if (!OpdPs.Zero || !OpdPs.Pos || !OpdPs.Neg)
-    return;
+  // a is neg or pos ==> !a is zero
+  State.Env.addToFlowCondition(State.Env.makeImplication(
+      State.Env.makeOr(*OpdPs.Pos, *OpdPs.Neg), *UOPs.Zero));
 
   if (auto *UOBoolVal = dyn_cast<BoolValue>(UOVal)) {
-    // !a is true  <==> a is zero
+    // !a <==> a is zero
     State.Env.addToFlowCondition(State.Env.makeIff(*UOBoolVal, *OpdPs.Zero));
-    // !a is true <==> !a is not zero
+    // !a <==> !a is not zero
     State.Env.addToFlowCondition(
         State.Env.makeIff(*UOBoolVal, State.Env.makeNot(*UOPs.Zero)));
   }
@@ -282,6 +278,7 @@ auto buildTransferMatchSwitch() {
                       unless(hasInitializer(expr()))))),
           transferUninitializedInt)
 
+      // constexpr int
       .CaseOfCFGStmt<Expr>(
           expr(hasType(isInteger())),
           transferExpr)
