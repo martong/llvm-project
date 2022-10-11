@@ -115,15 +115,18 @@ void initZero(Value &Val, Environment &Env) {
 struct SignProperties {
   BoolValue *Neg, *Zero, *Pos;
 };
-SignProperties initUnknown(Value &Val, Environment &Env) {
-  SignProperties Ps{&Env.makeAtomicBoolValue(), &Env.makeAtomicBoolValue(),
-                    &Env.makeAtomicBoolValue()};
+void setSignProperties(Value &Val, const SignProperties &Ps) {
   Val.setProperty("neg", *Ps.Neg);
   Val.setProperty("zero", *Ps.Zero);
   Val.setProperty("pos", *Ps.Pos);
+}
+SignProperties initUnknown(Value &Val, Environment &Env) {
+  SignProperties Ps{&Env.makeAtomicBoolValue(), &Env.makeAtomicBoolValue(),
+                    &Env.makeAtomicBoolValue()};
+  setSignProperties(Val, Ps);
   return Ps;
 }
-SignProperties getSignProperties(const Value &Val, Environment &Env) {
+SignProperties getSignProperties(const Value &Val, const Environment &Env) {
   return {
     dyn_cast_or_null<BoolValue>(Val.getProperty("neg")),
     dyn_cast_or_null<BoolValue>(Val.getProperty("zero")),
@@ -185,6 +188,7 @@ void transferBinary(const BinaryOperator *BO,
     State.Env.setValue(*Loc, *Comp);
   }
 
+  // TODO Use this as well:
   auto *NegatedComp = &State.Env.makeNot(*Comp);
 
   auto* LHS = State.Env.getValue(*BO->getLHS(), SkipPast::None);
@@ -229,6 +233,19 @@ void transferBinary(const BinaryOperator *BO,
     State.Env.addToFlowCondition(
         State.Env.makeImplication(*Comp,
         State.Env.makeImplication(*RHSPs.Neg, *LHSPs.Neg)));
+    break;
+  case BO_EQ:
+    State.Env.addToFlowCondition(
+        State.Env.makeImplication(*Comp,
+        State.Env.makeImplication(*RHSPs.Neg, *LHSPs.Neg)));
+    State.Env.addToFlowCondition(
+        State.Env.makeImplication(*Comp,
+        State.Env.makeImplication(*RHSPs.Zero, *LHSPs.Zero)));
+    State.Env.addToFlowCondition(
+        State.Env.makeImplication(*Comp,
+        State.Env.makeImplication(*RHSPs.Pos, *LHSPs.Pos)));
+    break;
+  case BO_NE: // Noop.
     break;
   default:
     llvm_unreachable("not implemented");
@@ -370,9 +387,58 @@ public:
     LatticeTransferState State(L, Env);
     TransferMatchSwitch(*Elt, getASTContext(), State);
   }
+  bool merge(QualType Type, const Value &Val1,
+                       const Environment &Env1, const Value &Val2,
+                       const Environment &Env2, Value &MergedVal,
+                       Environment &MergedEnv) override;
 private:
   CFGMatchSwitch<TransferState<NoopLattice>> TransferMatchSwitch;
 };
+
+// Copied from crubit.
+BoolValue& mergeBoolValues(BoolValue& Bool1, const Environment& Env1,
+                           BoolValue& Bool2, const Environment& Env2,
+                           Environment& MergedEnv) {
+  if (&Bool1 == &Bool2) {
+    return Bool1;
+  }
+
+  auto& MergedBool = MergedEnv.makeAtomicBoolValue();
+
+  // If `Bool1` and `Bool2` is constrained to the same true / false value,
+  // `MergedBool` can be constrained similarly without needing to consider the
+  // path taken - this simplifies the flow condition tracked in `MergedEnv`.
+  // Otherwise, information about which path was taken is used to associate
+  // `MergedBool` with `Bool1` and `Bool2`.
+  if (Env1.flowConditionImplies(Bool1) && Env2.flowConditionImplies(Bool2)) {
+    MergedEnv.addToFlowCondition(MergedBool);
+  } else if (Env1.flowConditionImplies(Env1.makeNot(Bool1)) &&
+             Env2.flowConditionImplies(Env2.makeNot(Bool2))) {
+    MergedEnv.addToFlowCondition(MergedEnv.makeNot(MergedBool));
+  }
+  return MergedBool;
+}
+
+bool SignPropagationAnalysis::merge(QualType Type, const Value &Val1,
+                                    const Environment &Env1, const Value &Val2,
+                                    const Environment &Env2, Value &MergedVal,
+                                    Environment &MergedEnv) {
+  if (!Type->isIntegerType())
+    return false;
+  SignProperties Ps1 = getSignProperties(Val1, Env1);
+  SignProperties Ps2 = getSignProperties(Val2, Env2);
+  if (!Ps1.Neg || !Ps2.Neg)
+    return false;
+  BoolValue &MergedNeg =
+      mergeBoolValues(*Ps1.Neg, Env1, *Ps2.Neg, Env2, MergedEnv);
+  BoolValue &MergedZero =
+      mergeBoolValues(*Ps1.Zero, Env1, *Ps2.Zero, Env2, MergedEnv);
+  BoolValue &MergedPos =
+      mergeBoolValues(*Ps1.Pos, Env1, *Ps2.Pos, Env2, MergedEnv);
+  setSignProperties(MergedVal,
+                    SignProperties{&MergedNeg, &MergedZero, &MergedPos});
+  return true;
+}
 
 template <typename Matcher>
 void runDataflow(llvm::StringRef Code, Matcher Match,
@@ -795,6 +861,158 @@ TEST(SignAnalysisTest, BinaryLE) {
         EXPECT_TRUE(isTop(A, ASTCtx, EnvR));
         // s
         EXPECT_TRUE(isNegative(A, ASTCtx, EnvS));
+      },
+      LangStandard::lang_cxx17);
+}
+
+TEST(SignAnalysisTest, BinaryEQ) {
+  std::string Code = R"(
+    int foo();
+    void fun() {
+      int a = foo();
+      if (a == -1) {
+        (void)0;
+        // [[n]]
+      }
+      if (a == 0) {
+        (void)0;
+        // [[z]]
+      }
+      if (a == 1) {
+        (void)0;
+        // [[p]]
+      }
+    }
+  )";
+  runDataflow(Code,
+      [](const llvm::StringMap<DataflowAnalysisState<NoopLattice>> &Results,
+         ASTContext &ASTCtx) {
+        ASSERT_THAT(Results.keys(), UnorderedElementsAre("n", "z", "p"));
+        const Environment &EnvN = getEnvironmentAtAnnotation(Results, "n");
+        const Environment &EnvZ = getEnvironmentAtAnnotation(Results, "z");
+        const Environment &EnvP = getEnvironmentAtAnnotation(Results, "p");
+
+        const ValueDecl *A = findValueDecl(ASTCtx, "a");
+
+        // n
+        EXPECT_TRUE(isNegative(A, ASTCtx, EnvN));
+        // z
+        EXPECT_TRUE(isZero(A, ASTCtx, EnvZ));
+        // p
+        EXPECT_TRUE(isPositive(A, ASTCtx, EnvP));
+      },
+      LangStandard::lang_cxx17);
+}
+
+TEST(SignAnalysisTest, JoinToTop) {
+  std::string Code = R"(
+    int foo();
+    void fun(bool b) {
+      int a = foo();
+      if (b) {
+        a = -1;
+        (void)0;
+        // [[p]]
+      } else {
+        a = 1;
+        (void)0;
+        // [[q]]
+      }
+      (void)0;
+      // [[r]]
+    }
+  )";
+  runDataflow(Code,
+      [](const llvm::StringMap<DataflowAnalysisState<NoopLattice>> &Results,
+         ASTContext &ASTCtx) {
+        ASSERT_THAT(Results.keys(), UnorderedElementsAre("p", "q", "r"));
+        const Environment &EnvP = getEnvironmentAtAnnotation(Results, "p");
+        const Environment &EnvQ = getEnvironmentAtAnnotation(Results, "q");
+        const Environment &EnvR = getEnvironmentAtAnnotation(Results, "r");
+
+        const ValueDecl *A = findValueDecl(ASTCtx, "a");
+
+        // p
+        EXPECT_TRUE(isNegative(A, ASTCtx, EnvP));
+        // q
+        EXPECT_TRUE(isPositive(A, ASTCtx, EnvQ));
+        // r
+        EXPECT_TRUE(isTop(A, ASTCtx, EnvR));
+      },
+      LangStandard::lang_cxx17);
+}
+
+TEST(SignAnalysisTest, JoinToNeg) {
+  std::string Code = R"(
+    int foo();
+    void fun() {
+      int a = foo();
+      if (a < 1) {
+        a = -1;
+        (void)0;
+        // [[p]]
+      } else {
+        a = -1;
+        (void)0;
+        // [[q]]
+      }
+      (void)0;
+      // [[r]]
+    }
+  )";
+  runDataflow(Code,
+      [](const llvm::StringMap<DataflowAnalysisState<NoopLattice>> &Results,
+         ASTContext &ASTCtx) {
+        ASSERT_THAT(Results.keys(), UnorderedElementsAre("p", "q", "r"));
+        const Environment &EnvP = getEnvironmentAtAnnotation(Results, "p");
+        const Environment &EnvQ = getEnvironmentAtAnnotation(Results, "q");
+        const Environment &EnvR = getEnvironmentAtAnnotation(Results, "r");
+
+        const ValueDecl *A = findValueDecl(ASTCtx, "a");
+
+        // p
+        EXPECT_TRUE(isNegative(A, ASTCtx, EnvP));
+        // q
+        EXPECT_TRUE(isNegative(A, ASTCtx, EnvQ));
+        // r
+        EXPECT_TRUE(isNegative(A, ASTCtx, EnvR));
+      },
+      LangStandard::lang_cxx17);
+}
+
+TEST(SignAnalysisTest, NestedIfs) {
+  std::string Code = R"(
+    int foo();
+    void fun() {
+      int a = foo();
+      if (a >= 0) {
+        (void)0;
+        // [[p]]
+        if (a == 0) {
+          (void)0;
+          // [[q]]
+        }
+      }
+      (void)0;
+      // [[r]]
+    }
+  )";
+  runDataflow(Code,
+      [](const llvm::StringMap<DataflowAnalysisState<NoopLattice>> &Results,
+         ASTContext &ASTCtx) {
+        ASSERT_THAT(Results.keys(), UnorderedElementsAre("p", "q", "r"));
+        const Environment &EnvP = getEnvironmentAtAnnotation(Results, "p");
+        const Environment &EnvQ = getEnvironmentAtAnnotation(Results, "q");
+        const Environment &EnvR = getEnvironmentAtAnnotation(Results, "r");
+
+        const ValueDecl *A = findValueDecl(ASTCtx, "a");
+
+        // p
+        EXPECT_TRUE(isTop(A, ASTCtx, EnvP));
+        // q
+        EXPECT_TRUE(isZero(A, ASTCtx, EnvQ));
+        // r
+        EXPECT_TRUE(isTop(A, ASTCtx, EnvR));
       },
       LangStandard::lang_cxx17);
 }
