@@ -35,8 +35,7 @@ using ::testing::UnorderedElementsAre;
 enum class Sign : int { Negative, Zero, Positive };
 
 Sign getSign(int64_t V) {
-  return V == 0 ? Sign::Zero
-                : (V < 0 ? Sign::Negative : Sign::Positive);
+  return V == 0 ? Sign::Zero : (V < 0 ? Sign::Negative : Sign::Positive);
 }
 
 using LatticeTransferState = TransferState<NoopLattice>;
@@ -44,19 +43,19 @@ using LatticeTransferState = TransferState<NoopLattice>;
 constexpr char kVar[] = "var";
 
 void initNegative(Value &Val, Environment &Env) {
-    Val.setProperty("neg", Env.getBoolLiteralValue(true));
-    Val.setProperty("zero", Env.getBoolLiteralValue(false));
-    Val.setProperty("pos", Env.getBoolLiteralValue(false));
+  Val.setProperty("neg", Env.getBoolLiteralValue(true));
+  Val.setProperty("zero", Env.getBoolLiteralValue(false));
+  Val.setProperty("pos", Env.getBoolLiteralValue(false));
 }
 void initPositive(Value &Val, Environment &Env) {
-    Val.setProperty("neg", Env.getBoolLiteralValue(false));
-    Val.setProperty("zero", Env.getBoolLiteralValue(false));
-    Val.setProperty("pos", Env.getBoolLiteralValue(true));
+  Val.setProperty("neg", Env.getBoolLiteralValue(false));
+  Val.setProperty("zero", Env.getBoolLiteralValue(false));
+  Val.setProperty("pos", Env.getBoolLiteralValue(true));
 }
 void initZero(Value &Val, Environment &Env) {
-    Val.setProperty("neg", Env.getBoolLiteralValue(false));
-    Val.setProperty("zero", Env.getBoolLiteralValue(true));
-    Val.setProperty("pos", Env.getBoolLiteralValue(false));
+  Val.setProperty("neg", Env.getBoolLiteralValue(false));
+  Val.setProperty("zero", Env.getBoolLiteralValue(true));
+  Val.setProperty("pos", Env.getBoolLiteralValue(false));
 }
 
 struct SignProperties {
@@ -74,10 +73,9 @@ SignProperties initUnknown(Value &Val, Environment &Env) {
   return Ps;
 }
 SignProperties getSignProperties(const Value &Val, const Environment &Env) {
-  return {
-    dyn_cast_or_null<BoolValue>(Val.getProperty("neg")),
-    dyn_cast_or_null<BoolValue>(Val.getProperty("zero")),
-    dyn_cast_or_null<BoolValue>(Val.getProperty("pos"))};
+  return {dyn_cast_or_null<BoolValue>(Val.getProperty("neg")),
+          dyn_cast_or_null<BoolValue>(Val.getProperty("zero")),
+          dyn_cast_or_null<BoolValue>(Val.getProperty("pos"))};
 }
 
 void transferUninitializedInt(const DeclStmt *D,
@@ -120,11 +118,9 @@ getValueAndSignProperties(const UnaryOperator *UO,
   return {UOVal, UOPs, OpdPs};
 }
 
-void transferBinary(const BinaryOperator *BO,
-                                 const MatchFinder::MatchResult &M,
-                                 LatticeTransferState &State) {
-  StorageLocation *Loc =
-      State.Env.getStorageLocation(*BO, SkipPast::None);
+void transferBinary(const BinaryOperator *BO, const MatchFinder::MatchResult &M,
+                    LatticeTransferState &State) {
+  StorageLocation *Loc = State.Env.getStorageLocation(*BO, SkipPast::None);
   if (!Loc) {
     Loc = &State.Env.createStorageLocation(*BO);
     State.Env.setStorageLocation(*BO, *Loc);
@@ -136,12 +132,13 @@ void transferBinary(const BinaryOperator *BO,
   }
 
   // TODO Use this as well:
-  //auto *NegatedComp = &State.Env.makeNot(*Comp);
+  // auto *NegatedComp = &State.Env.makeNot(*Comp);
 
-  auto* LHS = State.Env.getValue(*BO->getLHS(), SkipPast::None);
-  auto* RHS = State.Env.getValue(*BO->getRHS(), SkipPast::None);
+  auto *LHS = State.Env.getValue(*BO->getLHS(), SkipPast::None);
+  auto *RHS = State.Env.getValue(*BO->getRHS(), SkipPast::None);
 
-  if (!LHS || !RHS) return;
+  if (!LHS || !RHS)
+    return;
 
   SignProperties LHSPs = getSignProperties(*LHS, State.Env);
   SignProperties RHSPs = getSignProperties(*RHS, State.Env);
@@ -151,58 +148,48 @@ void transferBinary(const BinaryOperator *BO,
   switch (BO->getOpcode()) {
   case BO_GT:
     // pos > pos
-    State.Env.addToFlowCondition(
-        State.Env.makeImplication(*Comp,
-        State.Env.makeImplication(*RHSPs.Pos, *LHSPs.Pos)));
+    State.Env.addToFlowCondition(State.Env.makeImplication(
+        *Comp, State.Env.makeImplication(*RHSPs.Pos, *LHSPs.Pos)));
     // pos > zero
-    State.Env.addToFlowCondition(
-        State.Env.makeImplication(*Comp,
-        State.Env.makeImplication(*RHSPs.Zero, *LHSPs.Pos)));
+    State.Env.addToFlowCondition(State.Env.makeImplication(
+        *Comp, State.Env.makeImplication(*RHSPs.Zero, *LHSPs.Pos)));
     break;
   case BO_LT:
     // neg < neg
-    State.Env.addToFlowCondition(
-        State.Env.makeImplication(*Comp,
-        State.Env.makeImplication(*RHSPs.Neg, *LHSPs.Neg)));
+    State.Env.addToFlowCondition(State.Env.makeImplication(
+        *Comp, State.Env.makeImplication(*RHSPs.Neg, *LHSPs.Neg)));
     // neg < zero
-    State.Env.addToFlowCondition(
-        State.Env.makeImplication(*Comp,
-        State.Env.makeImplication(*RHSPs.Zero, *LHSPs.Neg)));
+    State.Env.addToFlowCondition(State.Env.makeImplication(
+        *Comp, State.Env.makeImplication(*RHSPs.Zero, *LHSPs.Neg)));
     break;
   case BO_GE:
     // pos >= pos
-    State.Env.addToFlowCondition(
-        State.Env.makeImplication(*Comp,
-        State.Env.makeImplication(*RHSPs.Pos, *LHSPs.Pos)));
+    State.Env.addToFlowCondition(State.Env.makeImplication(
+        *Comp, State.Env.makeImplication(*RHSPs.Pos, *LHSPs.Pos)));
     break;
   case BO_LE:
     // neg <= neg
-    State.Env.addToFlowCondition(
-        State.Env.makeImplication(*Comp,
-        State.Env.makeImplication(*RHSPs.Neg, *LHSPs.Neg)));
+    State.Env.addToFlowCondition(State.Env.makeImplication(
+        *Comp, State.Env.makeImplication(*RHSPs.Neg, *LHSPs.Neg)));
     break;
   case BO_EQ:
-    State.Env.addToFlowCondition(
-        State.Env.makeImplication(*Comp,
-        State.Env.makeImplication(*RHSPs.Neg, *LHSPs.Neg)));
-    State.Env.addToFlowCondition(
-        State.Env.makeImplication(*Comp,
-        State.Env.makeImplication(*RHSPs.Zero, *LHSPs.Zero)));
-    State.Env.addToFlowCondition(
-        State.Env.makeImplication(*Comp,
-        State.Env.makeImplication(*RHSPs.Pos, *LHSPs.Pos)));
+    State.Env.addToFlowCondition(State.Env.makeImplication(
+        *Comp, State.Env.makeImplication(*RHSPs.Neg, *LHSPs.Neg)));
+    State.Env.addToFlowCondition(State.Env.makeImplication(
+        *Comp, State.Env.makeImplication(*RHSPs.Zero, *LHSPs.Zero)));
+    State.Env.addToFlowCondition(State.Env.makeImplication(
+        *Comp, State.Env.makeImplication(*RHSPs.Pos, *LHSPs.Pos)));
     break;
   case BO_NE: // Noop.
     break;
   default:
     llvm_unreachable("not implemented");
   }
-
 }
 
 void transferUnaryMinus(const UnaryOperator *UO,
-                                 const MatchFinder::MatchResult &M,
-                                 LatticeTransferState &State) {
+                        const MatchFinder::MatchResult &M,
+                        LatticeTransferState &State) {
   auto [UOVal, UOPs, OpdPs] = getValueAndSignProperties(UO, M, State);
   if (!UOVal)
     return;
@@ -219,8 +206,8 @@ void transferUnaryMinus(const UnaryOperator *UO,
 }
 
 void transferUnaryNot(const UnaryOperator *UO,
-                                 const MatchFinder::MatchResult &M,
-                                 LatticeTransferState &State) {
+                      const MatchFinder::MatchResult &M,
+                      LatticeTransferState &State) {
   auto [UOVal, UOPs, OpdPs] = getValueAndSignProperties(UO, M, State);
   if (!UOVal)
     return;
@@ -238,12 +225,10 @@ void transferUnaryNot(const UnaryOperator *UO,
   }
 }
 
-void transferExpr(const Expr *E,
-                                 const MatchFinder::MatchResult &M,
-                                 LatticeTransferState &State) {
+void transferExpr(const Expr *E, const MatchFinder::MatchResult &M,
+                  LatticeTransferState &State) {
   const ASTContext &Context = *M.Context;
-  StorageLocation *Loc =
-      State.Env.getStorageLocation(*E, SkipPast::None);
+  StorageLocation *Loc = State.Env.getStorageLocation(*E, SkipPast::None);
   if (!Loc) {
     Loc = &State.Env.createStorageLocation(*E);
     State.Env.setStorageLocation(*E, *Loc);
@@ -283,9 +268,8 @@ auto refToVar() { return declRefExpr(to(varDecl().bind(kVar))); }
 auto buildTransferMatchSwitch() {
   return CFGMatchSwitchBuilder<LatticeTransferState>()
       // a op b (comparison)
-      .CaseOfCFGStmt<BinaryOperator>(
-          binaryOperator(isComparisonOperator()),
-          transferBinary)
+      .CaseOfCFGStmt<BinaryOperator>(binaryOperator(isComparisonOperator()),
+                                     transferBinary)
 
       // TODO handle binop +,-,*,/
 
@@ -302,16 +286,13 @@ auto buildTransferMatchSwitch() {
           transferUnaryNot)
 
       // int a;
-      .CaseOfCFGStmt<DeclStmt>(
-          declStmt(hasSingleDecl(
-              varDecl(decl().bind(kVar), hasType(isInteger()),
-                      unless(hasInitializer(expr()))))),
-          transferUninitializedInt)
+      .CaseOfCFGStmt<DeclStmt>(declStmt(hasSingleDecl(varDecl(
+                                   decl().bind(kVar), hasType(isInteger()),
+                                   unless(hasInitializer(expr()))))),
+                               transferUninitializedInt)
 
       // constexpr int
-      .CaseOfCFGStmt<Expr>(
-          expr(hasType(isInteger())),
-          transferExpr)
+      .CaseOfCFGStmt<Expr>(expr(hasType(isInteger())), transferExpr)
 
       .Build();
 }
@@ -320,9 +301,8 @@ class SignPropagationAnalysis
     : public DataflowAnalysis<SignPropagationAnalysis, NoopLattice> {
 public:
   SignPropagationAnalysis(ASTContext &Context)
-      : DataflowAnalysis<SignPropagationAnalysis, NoopLattice>(
-             Context),
-      TransferMatchSwitch(buildTransferMatchSwitch()) {}
+      : DataflowAnalysis<SignPropagationAnalysis, NoopLattice>(Context),
+        TransferMatchSwitch(buildTransferMatchSwitch()) {}
 
   static NoopLattice initialElement() { return {}; }
 
@@ -330,23 +310,23 @@ public:
     LatticeTransferState State(L, Env);
     TransferMatchSwitch(*Elt, getASTContext(), State);
   }
-  bool merge(QualType Type, const Value &Val1,
-                       const Environment &Env1, const Value &Val2,
-                       const Environment &Env2, Value &MergedVal,
-                       Environment &MergedEnv) override;
+  bool merge(QualType Type, const Value &Val1, const Environment &Env1,
+             const Value &Val2, const Environment &Env2, Value &MergedVal,
+             Environment &MergedEnv) override;
+
 private:
   CFGMatchSwitch<TransferState<NoopLattice>> TransferMatchSwitch;
 };
 
 // Copied from crubit.
-BoolValue& mergeBoolValues(BoolValue& Bool1, const Environment& Env1,
-                           BoolValue& Bool2, const Environment& Env2,
-                           Environment& MergedEnv) {
+BoolValue &mergeBoolValues(BoolValue &Bool1, const Environment &Env1,
+                           BoolValue &Bool2, const Environment &Env2,
+                           Environment &MergedEnv) {
   if (&Bool1 == &Bool2) {
     return Bool1;
   }
 
-  auto& MergedBool = MergedEnv.makeAtomicBoolValue();
+  auto &MergedBool = MergedEnv.makeAtomicBoolValue();
 
   // If `Bool1` and `Bool2` is constrained to the same true / false value,
   // `MergedBool` can be constrained similarly without needing to consider the
@@ -390,10 +370,11 @@ void runDataflow(llvm::StringRef Code, Matcher Match,
   using ast_matchers::hasName;
   ASSERT_THAT_ERROR(
       checkDataflow<SignPropagationAnalysis>(
-          AnalysisInputs<SignPropagationAnalysis>(Code, hasName(TargetFun),
-                                       [](ASTContext &C, Environment &) {
-                                         return SignPropagationAnalysis(C);
-                                       })
+          AnalysisInputs<SignPropagationAnalysis>(
+              Code, hasName(TargetFun),
+              [](ASTContext &C, Environment &) {
+                return SignPropagationAnalysis(C);
+              })
               .withASTBuildArgs(
                   {"-fsyntax-only", "-fno-delayed-template-parsing",
                    "-std=" +
@@ -417,10 +398,10 @@ const NodeType *findFirst(ASTContext &ASTCtx, const MatcherType &M) {
 }
 
 template <typename Node>
-std::pair<testing::AssertionResult, Value*> getProperty(const Environment &Env,
-                                       ASTContext &ASTCtx, const Node *N,
-                                       StringRef Property) {
-  if(!N)
+std::pair<testing::AssertionResult, Value *>
+getProperty(const Environment &Env, ASTContext &ASTCtx, const Node *N,
+            StringRef Property) {
+  if (!N)
     return {testing::AssertionFailure() << "No node", nullptr};
   const StorageLocation *Loc = Env.getStorageLocation(*N, SkipPast::None);
   if (!isa_and_nonnull<ScalarStorageLocation>(Loc))
@@ -443,7 +424,7 @@ testing::AssertionResult isPropertySet(const Environment &Env,
   if (!Prop)
     return Result;
   auto *BVProp = cast<BoolValue>(Prop);
-  //BVProp = Val ? BVProp : &Env.makeNot(*BVProp);
+  // BVProp = Val ? BVProp : &Env.makeNot(*BVProp);
   if (Env.flowConditionImplies(*BVProp) != Val)
     return testing::AssertionFailure()
            << Property << " is " << (Val ? "not" : "") << " implied"
@@ -455,10 +436,10 @@ template <typename Node>
 testing::AssertionResult isNegative(const Node *N, ASTContext &ASTCtx,
                                     const Environment &Env) {
   testing::AssertionResult R = isPropertySet(Env, ASTCtx, N, "neg", true);
-  if(!R)
+  if (!R)
     return R;
   R = isPropertySet(Env, ASTCtx, N, "zero", false);
-  if(!R)
+  if (!R)
     return R;
   return isPropertySet(Env, ASTCtx, N, "pos", false);
 }
@@ -466,10 +447,10 @@ template <typename Node>
 testing::AssertionResult isPositive(const Node *N, ASTContext &ASTCtx,
                                     const Environment &Env) {
   testing::AssertionResult R = isPropertySet(Env, ASTCtx, N, "pos", true);
-  if(!R)
+  if (!R)
     return R;
   R = isPropertySet(Env, ASTCtx, N, "zero", false);
-  if(!R)
+  if (!R)
     return R;
   return isPropertySet(Env, ASTCtx, N, "neg", false);
 }
@@ -477,21 +458,21 @@ template <typename Node>
 testing::AssertionResult isZero(const Node *N, ASTContext &ASTCtx,
                                 const Environment &Env) {
   testing::AssertionResult R = isPropertySet(Env, ASTCtx, N, "zero", true);
-  if(!R)
+  if (!R)
     return R;
   R = isPropertySet(Env, ASTCtx, N, "pos", false);
-  if(!R)
+  if (!R)
     return R;
   return isPropertySet(Env, ASTCtx, N, "neg", false);
 }
 template <typename Node>
 testing::AssertionResult isTop(const Node *N, ASTContext &ASTCtx,
-                                const Environment &Env) {
+                               const Environment &Env) {
   testing::AssertionResult R = isPropertySet(Env, ASTCtx, N, "zero", false);
-  if(!R)
+  if (!R)
     return R;
   R = isPropertySet(Env, ASTCtx, N, "pos", false);
-  if(!R)
+  if (!R)
     return R;
   return isPropertySet(Env, ASTCtx, N, "neg", false);
 }
@@ -509,10 +490,11 @@ TEST(SignAnalysisTest, Init) {
       // [[p]]
     }
   )";
-  runDataflow(Code,
+  runDataflow(
+      Code,
       [](const llvm::StringMap<DataflowAnalysisState<NoopLattice>> &Results,
          ASTContext &ASTCtx) {
-        //ASTCtx.getTranslationUnitDecl()->dump();
+        // ASTCtx.getTranslationUnitDecl()->dump();
         ASSERT_THAT(Results.keys(), UnorderedElementsAre("p"));
         const Environment &Env = getEnvironmentAtAnnotation(Results, "p");
 
@@ -541,7 +523,8 @@ TEST(SignAnalysisTest, UnaryMinus) {
       // [[p]]
     }
   )";
-  runDataflow(Code,
+  runDataflow(
+      Code,
       [](const llvm::StringMap<DataflowAnalysisState<NoopLattice>> &Results,
          ASTContext &ASTCtx) {
         ASSERT_THAT(Results.keys(), UnorderedElementsAre("p"));
@@ -563,7 +546,8 @@ TEST(SignAnalysisTest, UnaryNot) {
       // [[p]]
     }
   )";
-  runDataflow(Code,
+  runDataflow(
+      Code,
       [](const llvm::StringMap<DataflowAnalysisState<NoopLattice>> &Results,
          ASTContext &ASTCtx) {
         ASSERT_THAT(Results.keys(), UnorderedElementsAre("p"));
@@ -594,7 +578,8 @@ TEST(SignAnalysisTest, UnaryNotInIf) {
       }
     }
   )";
-  runDataflow(Code,
+  runDataflow(
+      Code,
       [](const llvm::StringMap<DataflowAnalysisState<NoopLattice>> &Results,
          ASTContext &ASTCtx) {
         ASSERT_THAT(Results.keys(), UnorderedElementsAre("p", "q"));
@@ -644,7 +629,8 @@ TEST(SignAnalysisTest, BinaryGT) {
       }
     }
   )";
-  runDataflow(Code,
+  runDataflow(
+      Code,
       [](const llvm::StringMap<DataflowAnalysisState<NoopLattice>> &Results,
          ASTContext &ASTCtx) {
         ASSERT_THAT(Results.keys(), UnorderedElementsAre("p", "q", "r", "s"));
@@ -691,7 +677,8 @@ TEST(SignAnalysisTest, BinaryLT) {
       }
     }
   )";
-  runDataflow(Code,
+  runDataflow(
+      Code,
       [](const llvm::StringMap<DataflowAnalysisState<NoopLattice>> &Results,
          ASTContext &ASTCtx) {
         ASSERT_THAT(Results.keys(), UnorderedElementsAre("p", "q", "r", "s"));
@@ -738,7 +725,8 @@ TEST(SignAnalysisTest, BinaryGE) {
       }
     }
   )";
-  runDataflow(Code,
+  runDataflow(
+      Code,
       [](const llvm::StringMap<DataflowAnalysisState<NoopLattice>> &Results,
          ASTContext &ASTCtx) {
         ASSERT_THAT(Results.keys(), UnorderedElementsAre("p", "q", "r", "s"));
@@ -785,7 +773,8 @@ TEST(SignAnalysisTest, BinaryLE) {
       }
     }
   )";
-  runDataflow(Code,
+  runDataflow(
+      Code,
       [](const llvm::StringMap<DataflowAnalysisState<NoopLattice>> &Results,
          ASTContext &ASTCtx) {
         ASSERT_THAT(Results.keys(), UnorderedElementsAre("p", "q", "r", "s"));
@@ -827,7 +816,8 @@ TEST(SignAnalysisTest, BinaryEQ) {
       }
     }
   )";
-  runDataflow(Code,
+  runDataflow(
+      Code,
       [](const llvm::StringMap<DataflowAnalysisState<NoopLattice>> &Results,
          ASTContext &ASTCtx) {
         ASSERT_THAT(Results.keys(), UnorderedElementsAre("n", "z", "p"));
@@ -865,7 +855,8 @@ TEST(SignAnalysisTest, JoinToTop) {
       // [[r]]
     }
   )";
-  runDataflow(Code,
+  runDataflow(
+      Code,
       [](const llvm::StringMap<DataflowAnalysisState<NoopLattice>> &Results,
          ASTContext &ASTCtx) {
         ASSERT_THAT(Results.keys(), UnorderedElementsAre("p", "q", "r"));
@@ -903,7 +894,8 @@ TEST(SignAnalysisTest, JoinToNeg) {
       // [[r]]
     }
   )";
-  runDataflow(Code,
+  runDataflow(
+      Code,
       [](const llvm::StringMap<DataflowAnalysisState<NoopLattice>> &Results,
          ASTContext &ASTCtx) {
         ASSERT_THAT(Results.keys(), UnorderedElementsAre("p", "q", "r"));
@@ -940,7 +932,8 @@ TEST(SignAnalysisTest, NestedIfs) {
       // [[r]]
     }
   )";
-  runDataflow(Code,
+  runDataflow(
+      Code,
       [](const llvm::StringMap<DataflowAnalysisState<NoopLattice>> &Results,
          ASTContext &ASTCtx) {
         ASSERT_THAT(Results.keys(), UnorderedElementsAre("p", "q", "r"));
