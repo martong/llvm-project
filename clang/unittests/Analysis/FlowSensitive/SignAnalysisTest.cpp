@@ -32,36 +32,12 @@ using namespace ast_matchers;
 using namespace test;
 using ::testing::UnorderedElementsAre;
 
-// Models the signedness of a variable, for all paths through
-// the program.
-struct SignLattice {
-  enum class SignState : int {
-    Bottom,
-    Negative,
-    Zero,
-    Positive,
-    Top,
-  };
-  SignState State;
+enum class Sign : int { Negative, Zero, Positive };
 
-  constexpr SignLattice() : State(SignState::Bottom) {}
-  constexpr SignLattice(int64_t V)
-      : State(V == 0 ? SignState::Zero
-                     : (V < 0 ? SignState::Negative : SignState::Positive)) {}
-  constexpr SignLattice(SignState S) : State(S) {}
-
-  static constexpr SignLattice bottom() {
-    return SignLattice(SignState::Bottom);
-  }
-  static constexpr SignLattice negative() {
-    return SignLattice(SignState::Negative);
-  }
-  static constexpr SignLattice zero() { return SignLattice(SignState::Zero); }
-  static constexpr SignLattice positive() {
-    return SignLattice(SignState::Positive);
-  }
-  static constexpr SignLattice top() { return SignLattice(SignState::Top); }
-};
+Sign getSign(int64_t V) {
+  return V == 0 ? Sign::Zero
+                : (V < 0 ? Sign::Negative : Sign::Positive);
+}
 
 using LatticeTransferState = TransferState<NoopLattice>;
 
@@ -288,22 +264,16 @@ void transferExpr(const Expr *E,
     return;
   }
 
-  const SignLattice L = SignLattice(R.Val.getInt().getExtValue());
-  switch (L.State) {
-  case SignLattice::SignState::Negative:
+  const Sign S = getSign(R.Val.getInt().getExtValue());
+  switch (S) {
+  case Sign::Negative:
     initNegative(*Val, State.Env);
     break;
-  case SignLattice::SignState::Zero:
+  case Sign::Zero:
     initZero(*Val, State.Env);
     break;
-  case SignLattice::SignState::Positive:
+  case Sign::Positive:
     initPositive(*Val, State.Env);
-    break;
-  case SignLattice::SignState::Top:
-    llvm_unreachable("should not be top here");
-    break;
-  case SignLattice::SignState::Bottom:
-    llvm_unreachable("should not be bottom here");
     break;
   }
 }
@@ -317,7 +287,7 @@ auto buildTransferMatchSwitch() {
           binaryOperator(isComparisonOperator()),
           transferBinary)
 
-      // TODO handle a op b where op is +,-,*,/
+      // TODO handle binop +,-,*,/
 
       // -a
       .CaseOfCFGStmt<UnaryOperator>(
