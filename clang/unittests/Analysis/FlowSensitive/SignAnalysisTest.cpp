@@ -416,65 +416,67 @@ getProperty(const Environment &Env, ASTContext &ASTCtx, const Node *N,
   return {testing::AssertionSuccess(), Prop};
 }
 
+// If Test if the given property of the given node is implied by the flow
+// condition. If 'Implies' is false then check if it is not implied.
 template <typename Node>
-testing::AssertionResult isPropertySet(const Environment &Env,
-                                       ASTContext &ASTCtx, const Node *N,
-                                       StringRef Property, bool Val) {
+testing::AssertionResult isPropertyImplied(const Environment &Env,
+                                           ASTContext &ASTCtx, const Node *N,
+                                           StringRef Property, bool Implies) {
   auto [Result, Prop] = getProperty(Env, ASTCtx, N, Property);
   if (!Prop)
     return Result;
   auto *BVProp = cast<BoolValue>(Prop);
   // BVProp = Val ? BVProp : &Env.makeNot(*BVProp);
-  if (Env.flowConditionImplies(*BVProp) != Val)
+  if (Env.flowConditionImplies(*BVProp) != Implies)
     return testing::AssertionFailure()
-           << Property << " is " << (Val ? "not" : "") << " implied"
-           << ", but should " << (Val ? "" : "not ") << "be";
+           << Property << " is " << (Implies ? "not" : "") << " implied"
+           << ", but should " << (Implies ? "" : "not ") << "be";
   return testing::AssertionSuccess();
 }
 
 template <typename Node>
 testing::AssertionResult isNegative(const Node *N, ASTContext &ASTCtx,
                                     const Environment &Env) {
-  testing::AssertionResult R = isPropertySet(Env, ASTCtx, N, "neg", true);
+  testing::AssertionResult R = isPropertyImplied(Env, ASTCtx, N, "neg", true);
   if (!R)
     return R;
-  R = isPropertySet(Env, ASTCtx, N, "zero", false);
+  R = isPropertyImplied(Env, ASTCtx, N, "zero", false);
   if (!R)
     return R;
-  return isPropertySet(Env, ASTCtx, N, "pos", false);
+  return isPropertyImplied(Env, ASTCtx, N, "pos", false);
 }
 template <typename Node>
 testing::AssertionResult isPositive(const Node *N, ASTContext &ASTCtx,
                                     const Environment &Env) {
-  testing::AssertionResult R = isPropertySet(Env, ASTCtx, N, "pos", true);
+  testing::AssertionResult R = isPropertyImplied(Env, ASTCtx, N, "pos", true);
   if (!R)
     return R;
-  R = isPropertySet(Env, ASTCtx, N, "zero", false);
+  R = isPropertyImplied(Env, ASTCtx, N, "zero", false);
   if (!R)
     return R;
-  return isPropertySet(Env, ASTCtx, N, "neg", false);
+  return isPropertyImplied(Env, ASTCtx, N, "neg", false);
 }
 template <typename Node>
 testing::AssertionResult isZero(const Node *N, ASTContext &ASTCtx,
                                 const Environment &Env) {
-  testing::AssertionResult R = isPropertySet(Env, ASTCtx, N, "zero", true);
+  testing::AssertionResult R = isPropertyImplied(Env, ASTCtx, N, "zero", true);
   if (!R)
     return R;
-  R = isPropertySet(Env, ASTCtx, N, "pos", false);
+  R = isPropertyImplied(Env, ASTCtx, N, "pos", false);
   if (!R)
     return R;
-  return isPropertySet(Env, ASTCtx, N, "neg", false);
+  return isPropertyImplied(Env, ASTCtx, N, "neg", false);
 }
 template <typename Node>
 testing::AssertionResult isTop(const Node *N, ASTContext &ASTCtx,
                                const Environment &Env) {
-  testing::AssertionResult R = isPropertySet(Env, ASTCtx, N, "zero", false);
+  testing::AssertionResult R = isPropertyImplied(Env, ASTCtx, N, "zero", false);
   if (!R)
     return R;
-  R = isPropertySet(Env, ASTCtx, N, "pos", false);
+  R = isPropertyImplied(Env, ASTCtx, N, "pos", false);
   if (!R)
     return R;
-  return isPropertySet(Env, ASTCtx, N, "neg", false);
+  return isPropertyImplied(Env, ASTCtx, N, "neg", false);
 }
 
 TEST(SignAnalysisTest, Init) {
