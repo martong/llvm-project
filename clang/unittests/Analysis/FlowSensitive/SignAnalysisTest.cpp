@@ -7,38 +7,22 @@
 //===----------------------------------------------------------------------===//
 //
 //  This file defines a simplistic version of Sign Analysis as an example
-//  of a forward, monotonic dataflow analysis. The analysis tracks all
-//  variables in the scope, but lacks escape analysis.
+//  of a forward, monotonic dataflow analysis.
 //
 //===----------------------------------------------------------------------===//
 
 #include "TestingSupport.h"
-#include "clang/AST/ASTContext.h"
-#include "clang/AST/Decl.h"
-#include "clang/AST/Expr.h"
-#include "clang/AST/Stmt.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/Analysis/FlowSensitive/CFGMatchSwitch.h"
 #include "clang/Analysis/FlowSensitive/DataflowAnalysis.h"
-#include "clang/Analysis/FlowSensitive/DataflowEnvironment.h"
-#include "clang/Analysis/FlowSensitive/DataflowLattice.h"
-#include "clang/Analysis/FlowSensitive/NoopAnalysis.h"
 #include "clang/Analysis/FlowSensitive/NoopLattice.h"
-#include "clang/Tooling/Tooling.h"
-#include "llvm/ADT/None.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/ADT/Twine.h"
-#include "llvm/Support/Error.h"
 #include "llvm/Testing/Support/Annotations.h"
 #include "llvm/Testing/Support/Error.h"
 #include "gtest/gtest.h"
-#include <cstdint>
 #include <memory>
-#include <ostream>
-#include <string>
-#include <utility>
 
 namespace {
 
@@ -82,19 +66,6 @@ struct SignLattice {
 using LatticeTransferState = TransferState<NoopLattice>;
 
 constexpr char kVar[] = "var";
-constexpr char kInit[] = "init";
-
-Value *getValue(const VarDecl *Var, const LatticeTransferState &State) {
-  const StorageLocation *Loc =
-      State.Env.getStorageLocation(*Var, SkipPast::None);
-  assert(isa_and_nonnull<ScalarStorageLocation>(Loc));
-  Value *Val = State.Env.getValue(*Loc);
-  // int A = -1; // IntegerValue
-  // int B = 0;  // BoolValue
-  // int C = 1;  // BoolValue
-  assert((isa_and_nonnull<IntegerValue, BoolValue>(Val)));
-  return Val;
-}
 
 void initNegative(Value &Val, Environment &Env) {
     Val.setProperty("neg", Env.getBoolLiteralValue(true));
@@ -189,7 +160,7 @@ void transferBinary(const BinaryOperator *BO,
   }
 
   // TODO Use this as well:
-  auto *NegatedComp = &State.Env.makeNot(*Comp);
+  //auto *NegatedComp = &State.Env.makeNot(*Comp);
 
   auto* LHS = State.Env.getValue(*BO->getLHS(), SkipPast::None);
   auto* RHS = State.Env.getValue(*BO->getRHS(), SkipPast::None);
@@ -341,10 +312,12 @@ auto refToVar() { return declRefExpr(to(varDecl().bind(kVar))); }
 
 auto buildTransferMatchSwitch() {
   return CFGMatchSwitchBuilder<LatticeTransferState>()
-      // a op b
+      // a op b (comparison)
       .CaseOfCFGStmt<BinaryOperator>(
           binaryOperator(isComparisonOperator()),
           transferBinary)
+
+      // TODO handle a op b where op is +,-,*,/
 
       // -a
       .CaseOfCFGStmt<UnaryOperator>(
