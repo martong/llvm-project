@@ -13,263 +13,53 @@
 //===----------------------------------------------------------------------===//
 
 #include "TestingSupport.h"
-#include "clang/AST/ASTContext.h"
-#include "clang/AST/Decl.h"
-#include "clang/AST/Expr.h"
-#include "clang/AST/Stmt.h"
-#include "clang/ASTMatchers/ASTMatchFinder.h"
-#include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/Analysis/FlowSensitive/DataflowAnalysis.h"
-#include "clang/Analysis/FlowSensitive/DataflowEnvironment.h"
-#include "clang/Analysis/FlowSensitive/DataflowLattice.h"
-#include "clang/Analysis/FlowSensitive/MapLattice.h"
 #include "clang/Tooling/Tooling.h"
-#include "llvm/ADT/None.h"
 #include "llvm/ADT/Optional.h"
-#include "llvm/ADT/StringRef.h"
-#include "llvm/ADT/Twine.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Testing/Support/Annotations.h"
 #include "llvm/Testing/Support/Error.h"
-#include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include <cstdint>
-#include <memory>
-#include <ostream>
-#include <string>
-#include <utility>
 
 namespace clang {
 namespace dataflow {
 namespace {
 using namespace ast_matchers;
+using namespace test;
 
-// Models the signedness of a variable, for all paths through
-// the program.
-struct SignLattice {
-  enum class SignState : int {
-    Bottom,
-    Negative,
-    Zero,
-    Positive,
-    Top,
+struct TestLattice {
+  enum class Branch : int {
+    True,
+    False
   };
-  SignState State;
+  llvm::Optional<Branch> TheBranch;
+  static TestLattice bottom() { return {}; }
 
-  constexpr SignLattice() : State(SignState::Bottom) {}
-  constexpr SignLattice(int64_t V)
-      : State(V == 0 ? SignState::Zero
-                     : (V < 0 ? SignState::Negative : SignState::Positive)) {}
-  constexpr SignLattice(SignState S) : State(S) {}
-
-  static constexpr SignLattice bottom() {
-    return SignLattice(SignState::Bottom);
+  // Does not matter for this test, but we must provide some definition of join.
+  LatticeJoinEffect join(const TestLattice &Other) {
+    return LatticeJoinEffect::Unchanged;
   }
-  static constexpr SignLattice negative() {
-    return SignLattice(SignState::Negative);
-  }
-  static constexpr SignLattice zero() { return SignLattice(SignState::Zero); }
-  static constexpr SignLattice positive() {
-    return SignLattice(SignState::Positive);
-  }
-  static constexpr SignLattice top() { return SignLattice(SignState::Top); }
-
-  friend bool operator==(const SignLattice &Lhs, const SignLattice &Rhs) {
-    return Lhs.State == Rhs.State;
-  }
-  friend bool operator!=(const SignLattice &Lhs, const SignLattice &Rhs) {
-    return !(Lhs == Rhs);
-  }
-
-  LatticeJoinEffect join(const SignLattice &Other) {
-    if (*this == Other || Other == bottom() || *this == top())
-      return LatticeJoinEffect::Unchanged;
-
-    if (*this == bottom()) {
-      *this = Other;
-      return LatticeJoinEffect::Changed;
-    }
-
-    *this = top();
-    return LatticeJoinEffect::Changed;
+  friend bool operator==(const TestLattice &Lhs, const TestLattice &Rhs) {
+    return Lhs.TheBranch == Rhs.TheBranch;
   }
 };
 
-std::ostream &operator<<(std::ostream &OS, const SignLattice &L) {
-  switch (L.State) {
-  case SignLattice::SignState::Bottom:
-    return OS << "Bottom";
-  case SignLattice::SignState::Negative:
-    return OS << "Negative";
-  case SignLattice::SignState::Zero:
-    return OS << "Zero";
-  case SignLattice::SignState::Positive:
-    return OS << "Positive";
-  case SignLattice::SignState::Top:
-    return OS << "Top";
-  }
-  llvm_unreachable("unknown SignState!");
-}
-
-using SignPropagationLattice = VarMapLattice<SignLattice>;
-
-constexpr char kDecl[] = "decl";
-constexpr char kVar[] = "var";
-constexpr char kRHSVar[] = "rhsvar";
-constexpr char kInit[] = "init";
-constexpr char kJustAssignment[] = "just-assignment";
-constexpr char kAssignment[] = "assignment";
-constexpr char kComparison[] = "comparison";
-constexpr char kRHS[] = "rhs";
-
-auto refToVar(StringRef V) { return declRefExpr(to(varDecl().bind(V))); }
-
-// N.B. This analysis is deliberately simplistic, leaving out many important
-// details needed for a real analysis. Most notably, the transfer function does
-// not account for the variable's address possibly escaping, which would
-// invalidate the analysis. It also could be optimized to drop out-of-scope
-// variables from the map.
-class SignPropagationAnalysis
-    : public DataflowAnalysis<SignPropagationAnalysis, SignPropagationLattice> {
+class TestPropagationAnalysis
+    : public DataflowAnalysis<TestPropagationAnalysis, TestLattice> {
 public:
-  explicit SignPropagationAnalysis(ASTContext &Context)
-      : DataflowAnalysis<SignPropagationAnalysis, SignPropagationLattice>(
+  explicit TestPropagationAnalysis(ASTContext &Context)
+      : DataflowAnalysis<TestPropagationAnalysis, TestLattice>(
             Context) {}
-
-  static SignPropagationLattice initialElement() {
-    return SignPropagationLattice::bottom();
+  static TestLattice initialElement() {
+    return TestLattice::bottom();
   }
-
-  void branchTransfer(bool Branch, const Stmt *S, SignPropagationLattice &Vars,
+  void branchTransfer(bool Branch, const Stmt *S, TestLattice &L,
                       Environment &Env) {
-    auto matcher = binaryOperator(isComparisonOperator(),
-                                  hasLHS(hasDescendant(refToVar(kVar))),
-                                  hasRHS(expr().bind(kRHS)))
-                       .bind(kComparison);
-    ASTContext &Context = getASTContext();
-    auto Results = match(matcher, *S, Context);
-    if (Results.empty())
-      return;
-    const BoundNodes &Nodes = Results[0];
-
-    const auto *Var = Nodes.getNodeAs<clang::VarDecl>(kVar);
-    assert(Var != nullptr);
-    if (const auto *BinOp =
-            Nodes.getNodeAs<clang::BinaryOperator>(kComparison)) {
-      const auto *RHS = Nodes.getNodeAs<clang::Expr>(kRHS);
-      assert(RHS != nullptr);
-
-      Expr::EvalResult R;
-      if (!(RHS->EvaluateAsInt(R, Context) && R.Val.isInt()))
-        return;
-      auto V = SignLattice(R.Val.getInt().getExtValue());
-      auto OpCode =
-          Branch ? BinOp->getOpcode()
-                 : BinaryOperator::negateComparisonOp(BinOp->getOpcode());
-      switch (OpCode) {
-      case BO_LT:
-        if (V == SignLattice::positive()) {
-          Vars[Var] = SignLattice::top();
-        } else {
-          // Var is less than 0 or a negative number.
-          Vars[Var] = SignLattice::negative();
-        }
-        break;
-      case BO_LE:
-        // Var is less than or equal to a negative number.
-        if (V == SignLattice::negative()) {
-          Vars[Var] = SignLattice::negative();
-        } else {
-          // Var is less than or equal to 0 or a positive number.
-          Vars[Var] = SignLattice::top();
-        }
-        break;
-      case BO_GT:
-        if (V == SignLattice::negative()) {
-          Vars[Var] = SignLattice::top();
-        } else {
-          // Var is greater than 0 or a positive number.
-          Vars[Var] = SignLattice::positive();
-        }
-        break;
-      case BO_GE:
-        // Var is greater than or equal to a positive number.
-        if (V == SignLattice::positive()) {
-          Vars[Var] = SignLattice::positive();
-        } else {
-          // Var is greater than or equal to 0 or a negative number.
-          Vars[Var] = SignLattice::top();
-        }
-        break;
-      case BO_EQ:
-        Vars[Var] = V;
-        break;
-      case BO_NE: // Noop.
-        break;
-      default:
-        llvm_unreachable("not implemented");
-      }
-    }
-  }
-
-  void transfer(const Stmt *S, SignPropagationLattice &Vars, Environment &Env) {
-    auto matcher = stmt(
-        anyOf(declStmt(hasSingleDecl(
-                  varDecl(decl().bind(kVar), hasType(isInteger()),
-                          optionally(hasInitializer(expr().bind(kInit))))
-                      .bind(kDecl))),
-              binaryOperator(hasOperatorName("="), hasLHS(refToVar(kVar)),
-                             hasRHS(hasDescendant(refToVar(kRHSVar))))
-                  .bind(kJustAssignment),
-              binaryOperator(isAssignmentOperator(), hasLHS(refToVar(kVar)))
-                  .bind(kAssignment)));
-
-    ASTContext &Context = getASTContext();
-    auto Results = match(matcher, *S, Context);
-    if (Results.empty())
-      return;
-    const BoundNodes &Nodes = Results[0];
-
-    const auto *Var = Nodes.getNodeAs<clang::VarDecl>(kVar);
-    assert(Var != nullptr);
-
-    if (Nodes.getNodeAs<clang::VarDecl>(kDecl) != nullptr) {
-      if (const auto *E = Nodes.getNodeAs<clang::Expr>(kInit)) {
-        Expr::EvalResult R;
-        Vars[Var] = (E->EvaluateAsInt(R, Context) && R.Val.isInt())
-                        ? SignLattice(R.Val.getInt().getExtValue())
-                        : SignLattice::bottom();
-      } else {
-        // An unitialized variable holds *some* value, but we don't know what it
-        // is (it is implementation defined), so we set it to top.
-        Vars[Var] = SignLattice::top();
-      }
-      // Assign one variable to another.
-    } else if (Nodes.getNodeAs<clang::Expr>(kJustAssignment)) {
-      const auto *RHSVar = Nodes.getNodeAs<clang::VarDecl>(kRHSVar);
-      assert(RHSVar);
-      auto It = Vars.find(RHSVar);
-      if (It != Vars.end())
-        Vars[Var] = It->second;
-      else
-        Vars[Var] = SignLattice::top();
-      // Assign a constant to a variable.
-    } else if (const auto *BinOp =
-                   Nodes.getNodeAs<clang::BinaryOperator>(kAssignment)) {
-      const auto *RHS = BinOp->getRHS();
-      Expr::EvalResult R;
-      // Not a constant.
-      if (!(RHS->EvaluateAsInt(R, Context) && R.Val.isInt())) {
-        Vars[Var] = SignLattice::top();
-        return;
-      }
-      Vars[Var] = SignLattice(R.Val.getInt().getExtValue());
-    }
+    L.TheBranch =
+        Branch ? TestLattice::Branch::True : TestLattice::Branch::False;
   }
 };
 
-using ::testing::IsEmpty;
-using ::testing::Pair;
 using ::testing::UnorderedElementsAre;
 
 MATCHER_P(Var, name,
@@ -280,123 +70,40 @@ MATCHER_P(Var, name,
   return arg->getName() == name;
 }
 
-MATCHER(Bottom, "") { return arg == arg.bottom(); }
-MATCHER(Negative, "") { return arg == arg.negative(); }
-MATCHER(Zero, "") { return arg == arg.zero(); }
-MATCHER(Positive, "") { return arg == arg.positive(); }
-MATCHER(Top, "") { return arg == arg.top(); }
-
-MATCHER_P(HoldsSignLattice, m,
-          ((negation ? "doesn't hold" : "holds") +
-           llvm::StringRef(" a lattice element that ") +
-           ::testing::DescribeMatcher<SignPropagationLattice>(m, negation))
-              .str()) {
-  return ExplainMatchResult(m, arg.Lattice, result_listener);
-}
-
 template <typename Matcher>
-void RunDataflow(llvm::StringRef Code, Matcher Expectations) {
+void runDataflow(llvm::StringRef Code, Matcher Match,
+                 LangStandard::Kind Std = LangStandard::lang_cxx17,
+                 llvm::StringRef TargetFun = "fun") {
+  using ast_matchers::hasName;
   ASSERT_THAT_ERROR(
-      test::checkDataflow<SignPropagationAnalysis>(
-          Code, "fun",
-          [](ASTContext &C, Environment &) {
-            return SignPropagationAnalysis(C);
-          },
-          [&Expectations](
-              llvm::ArrayRef<std::pair<
-                  std::string,
-                  DataflowAnalysisState<SignPropagationAnalysis::Lattice>>>
-                  Results,
-              ASTContext &) { EXPECT_THAT(Results, Expectations); },
-          {"-fsyntax-only", "-std=c++17"}),
+      checkDataflow<TestPropagationAnalysis>(
+          AnalysisInputs<TestPropagationAnalysis>(
+              Code, hasName(TargetFun),
+              [](ASTContext &C, Environment &) {
+                return TestPropagationAnalysis(C);
+              })
+              .withASTBuildArgs(
+                  {"-fsyntax-only", "-fno-delayed-template-parsing",
+                   "-std=" +
+                       std::string(LangStandard::getLangStandardForKind(Std)
+                                       .getName())}),
+          /*VerifyResults=*/
+          [&Match](const llvm::StringMap<DataflowAnalysisState<TestLattice>>
+                       &Results,
+                   const AnalysisOutputs &AO) { Match(Results, AO.ASTCtx); }),
       llvm::Succeeded());
 }
 
-TEST(SignAnalysisTest, Init) {
-  std::string Code = R"(
-    void fun() {
-      int neg = -1;
-      int zero = 0;
-      int pos = 1;
-      int uninited;
-      // [[p]]
-    }
-  )";
-  RunDataflow(Code, UnorderedElementsAre(
-                        Pair("p", HoldsSignLattice(UnorderedElementsAre(
-                                      Pair(Var("neg"), Negative()),
-                                      Pair(Var("zero"), Zero()),
-                                      Pair(Var("pos"), Positive()),
-                                      Pair(Var("uninited"), Top()))))));
+template <typename LatticeT>
+const LatticeT &getLatticeAtAnnotation(
+    const llvm::StringMap<DataflowAnalysisState<LatticeT>> &AnnotationStates,
+    llvm::StringRef Annotation) {
+  auto It = AnnotationStates.find(Annotation);
+  assert(It != AnnotationStates.end());
+  return It->getValue().Lattice;
 }
 
-TEST(SignAnalysisTest, Assignment) {
-  std::string Code = R"(
-    void fun() {
-      int neg, zero, pos;
-      neg = -1;
-      zero = 0;
-      pos = 1;
-      // [[p]]
-    }
-  )";
-  RunDataflow(Code, UnorderedElementsAre(
-                        Pair("p", HoldsSignLattice(UnorderedElementsAre(
-                                      Pair(Var("neg"), Negative()),
-                                      Pair(Var("zero"), Zero()),
-                                      Pair(Var("pos"), Positive()))))));
-}
-
-TEST(SignAnalysisTest, InitToBottom) {
-  std::string Code = R"(
-    int foo();
-    void fun() {
-      int a = foo();
-      // [[p]]
-    }
-  )";
-  RunDataflow(Code, UnorderedElementsAre(
-                        Pair("p", HoldsSignLattice(UnorderedElementsAre(
-                                      Pair(Var("a"), Bottom()))))));
-}
-
-TEST(SignAnalysisTest, AssignmentAfterBottom) {
-  std::string Code = R"(
-    int foo();
-    void fun(bool b) {
-      int a = foo();
-      a = -1;
-      // [[p]]
-    }
-  )";
-  RunDataflow(Code, UnorderedElementsAre(
-                        Pair("p", HoldsSignLattice(UnorderedElementsAre(
-                                      Pair(Var("a"), Negative()))))));
-}
-
-TEST(SignAnalysisTest, GreaterThan) {
-  std::string Code = R"(
-    int foo();
-    void fun() {
-      int a = foo();
-      if (a > 0) {
-        (void)0;
-        // [[p]]
-      }
-      if (a > -1) {
-        (void)0;
-        // [[q]]
-      }
-    }
-  )";
-  RunDataflow(Code, UnorderedElementsAre(
-                        Pair("p", HoldsSignLattice(UnorderedElementsAre(
-                                      Pair(Var("a"), Positive())))),
-                        Pair("q", HoldsSignLattice(UnorderedElementsAre(
-                                      Pair(Var("a"), Top()))))));
-}
-
-TEST(SignAnalysisTest, GreaterThanIfElse) {
+TEST(TransferBranchTest, IfElse) {
   std::string Code = R"(
     void fun(int a) {
       if (a > 0) {
@@ -408,181 +115,19 @@ TEST(SignAnalysisTest, GreaterThanIfElse) {
       }
     }
   )";
-  RunDataflow(Code, UnorderedElementsAre(
-                        Pair("p", HoldsSignLattice(UnorderedElementsAre(
-                                      Pair(Var("a"), Positive())))),
-                        Pair("q", HoldsSignLattice(UnorderedElementsAre(
-                                      Pair(Var("a"), Top()))))));
-}
-
-TEST(SignAnalysisTest, LessThan) {
-  std::string Code = R"(
-    int foo();
-    void fun() {
-      int a = foo();
-      if (a < 0) {
-        (void)0;
-        // [[p]]
-      }
-      if (a < 1) {
-        (void)0;
-        // [[q]]
-      }
-    }
-  )";
-  RunDataflow(Code, UnorderedElementsAre(
-                        Pair("p", HoldsSignLattice(UnorderedElementsAre(
-                                      Pair(Var("a"), Negative())))),
-                        Pair("q", HoldsSignLattice(UnorderedElementsAre(
-                                      Pair(Var("a"), Top()))))));
-}
-
-TEST(SignAnalysisTest, LessThanIfElse) {
-  std::string Code = R"(
-    void fun(int a) {
-      if (a < 0) {
-        (void)1;
-        // [[p]]
-      } else {
-        (void)0;
-        // [[q]]
-      }
-    }
-  )";
-  RunDataflow(Code, UnorderedElementsAre(
-                        Pair("p", HoldsSignLattice(UnorderedElementsAre(
-                                      Pair(Var("a"), Negative())))),
-                        Pair("q", HoldsSignLattice(UnorderedElementsAre(
-                                      Pair(Var("a"), Top()))))));
-}
-
-TEST(SignAnalysisTest, Equality) {
-  std::string Code = R"(
-    int foo();
-    void fun() {
-      int a = foo();
-      if (a == -1) {
-        (void)0;
-        // [[n]]
-      }
-      if (a == 0) {
-        (void)0;
-        // [[z]]
-      }
-      if (a == 1) {
-        (void)0;
-        // [[p]]
-      }
-    }
-  )";
-  RunDataflow(Code, UnorderedElementsAre(
-                        Pair("n", HoldsSignLattice(UnorderedElementsAre(
-                                      Pair(Var("a"), Negative())))),
-                        Pair("z", HoldsSignLattice(UnorderedElementsAre(
-                                      Pair(Var("a"), Zero())))),
-                        Pair("p", HoldsSignLattice(UnorderedElementsAre(
-                                      Pair(Var("a"), Positive()))))));
-}
-
-TEST(SignAnalysisTest, SymbolicAssignment) {
-  std::string Code = R"(
-    int foo();
-    void fun() {
-      int a = foo();
-      int b = foo();
-      if (a < 0) {
-        b = a;
-        (void)0;
-        // [[p]]
-      }
-    }
-  )";
-  RunDataflow(Code, UnorderedElementsAre(
-                        Pair("p", HoldsSignLattice(UnorderedElementsAre(
-                                      Pair(Var("a"), Negative()),
-                                      Pair(Var("b"), Negative()))))));
-}
-
-TEST(SignAnalysisTest, JoinToTop) {
-  std::string Code = R"(
-    int foo();
-    void fun(bool b) {
-      int a = foo();
-      if (b) {
-        a = -1;
-        (void)0;
-        // [[p]]
-      } else {
-        a = 1;
-        (void)0;
-        // [[q]]
-      }
-      (void)0;
-      // [[r]]
-    }
-  )";
-  RunDataflow(Code, UnorderedElementsAre(
-                        Pair("p", HoldsSignLattice(UnorderedElementsAre(
-                                      Pair(Var("a"), Negative())))),
-                        Pair("q", HoldsSignLattice(UnorderedElementsAre(
-                                      Pair(Var("a"), Positive())))),
-                        Pair("r", HoldsSignLattice(UnorderedElementsAre(
-                                      Pair(Var("a"), Top()))))));
-}
-
-TEST(SignAnalysisTest, JoinToNeg) {
-  std::string Code = R"(
-    int foo();
-    void fun() {
-      int a = foo();
-      if (a < 1) {
-        a = -1;
-        (void)0;
-        // [[p]]
-      } else {
-        a = -1;
-        (void)0;
-        // [[q]]
-      }
-      (void)0;
-      // [[r]]
-    }
-  )";
-  RunDataflow(Code, UnorderedElementsAre(
-                        Pair("p", HoldsSignLattice(UnorderedElementsAre(
-                                      Pair(Var("a"), Negative())))),
-                        Pair("q", HoldsSignLattice(UnorderedElementsAre(
-                                      Pair(Var("a"), Negative())))),
-                        Pair("r", HoldsSignLattice(UnorderedElementsAre(
-                                      Pair(Var("a"), Negative()))))));
-}
-
-TEST(SignAnalysisTest, NestedIfs) {
-  std::string Code = R"(
-    int foo();
-    void fun() {
-      int a = foo();
-      if (a >= 0) {
-        (void)0;
-        // [[p]]
-        if (a == 0) {
-          (void)0;
-          // [[q]]
-        }
-      }
-      (void)0;
-      // [[r]]
-    }
-  )";
-  RunDataflow(
+  runDataflow(
       Code,
-      UnorderedElementsAre(
-          Pair("p",
-               HoldsSignLattice(UnorderedElementsAre(Pair(Var("a"), Top())))),
-          Pair("q",
-               HoldsSignLattice(UnorderedElementsAre(Pair(Var("a"), Zero())))),
-          Pair("r",
-               HoldsSignLattice(UnorderedElementsAre(Pair(Var("a"), Top()))))));
+      [](const llvm::StringMap<DataflowAnalysisState<TestLattice>> &Results,
+         ASTContext &ASTCtx) {
+        ASSERT_THAT(Results.keys(), UnorderedElementsAre("p", "q"));
+
+        const TestLattice &LP = getLatticeAtAnnotation(Results, "p");
+        EXPECT_TRUE(LP.TheBranch == TestLattice::Branch::True);
+
+        const TestLattice &LQ = getLatticeAtAnnotation(Results, "q");
+        EXPECT_TRUE(LQ.TheBranch == TestLattice::Branch::False);
+      },
+      LangStandard::lang_cxx17);
 }
 
 } // namespace
