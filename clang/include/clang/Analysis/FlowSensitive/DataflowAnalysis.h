@@ -124,13 +124,13 @@ public:
   }
 
   // Default implementation is a Noop.
-  virtual void branchTransfer(bool Branch, const Stmt *S, Lattice &L,
+  virtual void transferBranch(bool Branch, const Stmt *S, Lattice &L,
                               Environment &Env) {}
 
-  void branchTransferTypeErased(bool Branch, const Stmt *Stmt,
+  void transferBranchTypeErased(bool Branch, const Stmt *Stmt,
                                 TypeErasedLattice &E, Environment &Env) final {
     Lattice &L = llvm::any_cast<Lattice &>(E.Value);
-    branchTransfer(Branch, Stmt, L, Env);
+    transferBranch(Branch, Stmt, L, Env);
   }
 
 private:

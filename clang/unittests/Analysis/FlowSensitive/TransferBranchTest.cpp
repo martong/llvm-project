@@ -53,7 +53,7 @@ public:
   static TestLattice initialElement() {
     return TestLattice::bottom();
   }
-  void branchTransfer(bool Branch, const Stmt *S, TestLattice &L,
+  void transferBranch(bool Branch, const Stmt *S, TestLattice &L,
                       Environment &Env) {
     L.TheBranch =
         Branch ? TestLattice::Branch::True : TestLattice::Branch::False;
@@ -103,7 +103,7 @@ const LatticeT &getLatticeAtAnnotation(
   return It->getValue().Lattice;
 }
 
-TEST(BranchTransferTest, IfElse) {
+TEST(TransferBranchTest, IfElse) {
   std::string Code = R"(
     void fun(int a) {
       if (a > 0) {

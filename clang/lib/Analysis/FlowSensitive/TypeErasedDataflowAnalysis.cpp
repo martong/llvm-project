@@ -255,7 +255,7 @@ computeBlockInputState(const CFGBlock &Block, AnalysisContext &AC) {
                               *BuiltinTransferOpts)
                 .Visit(PredTerminatorStmt);
         if (Cond)
-          Analysis.branchTransferTypeErased(Assumption, Cond, PredState.Lattice,
+          Analysis.transferBranchTypeErased(Assumption, Cond, PredState.Lattice,
                                             PredState.Env);
       }
     }

@@ -83,7 +83,7 @@ public:
   /// element and type-erased lattice element.
   virtual void transferTypeErased(const CFGElement *, TypeErasedLattice &,
                                   Environment &) = 0;
-  virtual void branchTransferTypeErased(bool Branch, const Stmt *,
+  virtual void transferBranchTypeErased(bool Branch, const Stmt *,
                                         TypeErasedLattice &, Environment &) = 0;
 
   /// If the built-in transfer functions (which model the heap and stack in the
