@@ -44,6 +44,17 @@ struct HasTransferFor<
         std::declval<const InputT *>(), std::declval<LatticeT &>(),
         std::declval<Environment &>()))>> : std::true_type {};
 
+template <typename AnalysisT, typename LatticeT, typename = std::void_t<>>
+struct HasTransferBranchFor : std::false_type {};
+
+template <typename AnalysisT, typename LatticeT>
+struct HasTransferBranchFor<
+    AnalysisT, LatticeT,
+    std::void_t<decltype(std::declval<AnalysisT>().transferBranch(
+        std::declval<bool>(), std::declval<const Stmt *>(),
+        std::declval<LatticeT &>(), std::declval<Environment &>()))>>
+    : std::true_type {};
+
 /// Base class template for dataflow analyses built on a single lattice type.
 ///
 /// Requirements:
@@ -123,14 +134,15 @@ public:
     }
   }
 
-  // Default implementation is a Noop.
-  virtual void transferBranch(bool Branch, const Stmt *S, Lattice &L,
-                              Environment &Env) {}
-
   void transferBranchTypeErased(bool Branch, const Stmt *Stmt,
                                 TypeErasedLattice &E, Environment &Env) final {
-    Lattice &L = llvm::any_cast<Lattice &>(E.Value);
-    transferBranch(Branch, Stmt, L, Env);
+    if constexpr (HasTransferBranchFor<Derived, LatticeT>::value) {
+      Lattice &L = llvm::any_cast<Lattice &>(E.Value);
+      static_cast<Derived *>(this)->transferBranch(Branch, Stmt, L, Env);
+    }
+    // Silence unused parameter warnings.
+    (void)Branch;
+    (void)Stmt;
   }
 
 private:
