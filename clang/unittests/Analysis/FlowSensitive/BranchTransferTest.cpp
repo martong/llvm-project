@@ -103,7 +103,7 @@ const LatticeT &getLatticeAtAnnotation(
   return It->getValue().Lattice;
 }
 
-TEST(TransferBranchTest, IfElse) {
+TEST(BranchTransferTest, IfElse) {
   std::string Code = R"(
     void fun(int a) {
       if (a > 0) {
