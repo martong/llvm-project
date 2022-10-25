@@ -216,6 +216,8 @@ void transferUnaryNot(const UnaryOperator *UO,
   State.Env.addToFlowCondition(State.Env.makeImplication(
       State.Env.makeOr(*OpdPs.Pos, *OpdPs.Neg), *UOPs.Zero));
 
+  // FIXME Handle this logic universally, not just for unary not. But Where to
+  // put the generic handler, transferExpr maybe?
   if (auto *UOBoolVal = dyn_cast<BoolValue>(UOVal)) {
     // !a <==> a is zero
     State.Env.addToFlowCondition(State.Env.makeIff(*UOBoolVal, *OpdPs.Zero));
@@ -266,6 +268,10 @@ void transferExpr(const Expr *E, const MatchFinder::MatchResult &M,
 auto refToVar() { return declRefExpr(to(varDecl().bind(kVar))); }
 
 auto buildTransferMatchSwitch() {
+  // Note, the order of the cases is important, the most generic should be
+  // added last.
+  // FIXME Discover what happens if there are multiple matching ASTMatchers for
+  // one Stmt? All matching case's handler should be called and in what order?
   return CFGMatchSwitchBuilder<LatticeTransferState>()
       // a op b (comparison)
       .CaseOfCFGStmt<BinaryOperator>(binaryOperator(isComparisonOperator()),
